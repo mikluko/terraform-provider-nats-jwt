@@ -24,7 +24,7 @@ Terraform provider for managing NATS JWT authentication tokens and related resou
 ### Building
 
 ```bash
-go build -o terraform-provider-natsjwt
+go build -o terraform-provider-nats-jwt
 ```
 
 ### Testing
