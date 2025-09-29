@@ -1,0 +1,7 @@
+# Example environment variables for integration testing
+# Copy this file to .envrc and populate with actual values
+# For direnv users: direnv allow
+
+# Required: Operator seed for integration tests
+# Generate with: nsc generate nkey --operator
+export NATSJWT_TEST_OPERATOR_SEED=""   # Operator seed (SO...)
