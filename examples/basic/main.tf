@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     natsjwt = {
-      source = "registry.terraform.io/mikluko/natsjwt"
+      source = "mikluko/nats-jwt"
     }
   }
 }
@@ -19,8 +19,8 @@ resource "natsjwt_operator" "main" {
   generate_signing_key = true
 
   # Optional: JWT validity
-  expiry = "8760h"  # 1 year
-  start  = "0"      # valid immediately
+  expiry = "8760h" # 1 year
+  start  = "0"     # valid immediately
 }
 
 # Create an account under the operator
@@ -29,18 +29,18 @@ resource "natsjwt_account" "app" {
   operator_seed = natsjwt_operator.main.seed
 
   # Default permissions for all users in this account
-  allow_pub    = ["app.>"]
-  allow_sub    = ["app.>", "metrics.>"]
-  deny_pub     = ["app.admin.>"]
-  deny_sub     = ["app.secrets.>"]
+  allow_pub = ["app.>"]
+  allow_sub = ["app.>", "metrics.>"]
+  deny_pub  = ["app.admin.>"]
+  deny_sub  = ["app.secrets.>"]
 
   # Allow publishing to reply subjects (for services)
   allow_pub_response = 1
   response_ttl       = "5s"
 
   # JWT validity
-  expiry = "8760h"  # 1 year
-  start  = "0"      # valid immediately
+  expiry = "8760h" # 1 year
+  start  = "0"     # valid immediately
 }
 
 # Create a user under the account
@@ -49,13 +49,13 @@ resource "natsjwt_user" "service" {
   account_seed = natsjwt_account.app.seed
 
   # User-specific permissions (overrides account defaults)
-  allow_pub    = ["app.events.>", "app.requests.>"]
-  allow_sub    = ["app.>", "metrics.>"]
-  deny_pub     = ["app.admin.>"]
-  deny_sub     = ["app.secrets.>"]
+  allow_pub = ["app.events.>", "app.requests.>"]
+  allow_sub = ["app.>", "metrics.>"]
+  deny_pub  = ["app.admin.>"]
+  deny_sub  = ["app.secrets.>"]
 
   # Allow this user to publish responses
-  allow_pub_response = 5  # Can publish up to 5 responses
+  allow_pub_response = 5 # Can publish up to 5 responses
   response_ttl       = "10s"
 
   # Optional: tags for organizational purposes
@@ -65,8 +65,8 @@ resource "natsjwt_user" "service" {
   source_network = ["192.168.1.0/24"]
 
   # JWT validity
-  expiry = "720h"  # 30 days
-  start  = "0"     # valid immediately
+  expiry = "720h" # 30 days
+  start  = "0"    # valid immediately
 
   # Optional: bearer token (no connect challenge required)
   bearer = false

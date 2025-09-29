@@ -1,0 +1,30 @@
+---
+page_title: "{{.ProviderShortName}} Provider"
+description: |-
+  The NATS JWT provider manages JWT tokens for NATS authentication
+---
+
+# {{.ProviderShortName}} Provider
+
+The NATS JWT provider allows Terraform to manage JWT tokens for NATS authentication and authorization. It provides resources to create and manage operators, accounts, and users in a NATS JWT authentication hierarchy.
+
+## Use Cases
+
+- **Automated NATS Deployment**: Generate all necessary JWT tokens for a complete NATS cluster setup
+- **Multi-tenant Systems**: Create isolated accounts for different teams or applications
+- **User Management**: Automate user creation with specific permissions
+- **GitOps Integration**: Store NATS authentication configuration as code
+
+## Authentication Hierarchy
+
+NATS JWT authentication follows a three-level hierarchy:
+
+1. **Operator**: The root of trust that signs account JWTs
+2. **Account**: Represents a tenant/namespace that signs user JWTs
+3. **User**: Individual authentication credentials with specific permissions
+
+## Example Usage
+
+{{tffile "examples/provider/main.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
