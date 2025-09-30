@@ -46,6 +46,18 @@ resource "natsjwt_account" "application" {
   # Allow publishing responses
   allow_pub_response = 1
   response_ttl       = "5s"
+
+  # Account limits (optional)
+  max_connections   = 1000
+  max_subscriptions = 10000
+  max_data          = -1  # Unlimited data
+  max_payload       = 1048576  # 1MB max message size
+
+  # JetStream limits (optional, enables JetStream for this account)
+  max_memory_storage = 1073741824  # 1GB memory storage
+  max_disk_storage   = 10737418240 # 10GB disk storage
+  max_streams        = 10
+  max_consumers      = 100
 }
 
 # Create system account admin user

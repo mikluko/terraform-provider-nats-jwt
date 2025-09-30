@@ -41,6 +41,28 @@ type AccountResourceModel struct {
 	ResponseTTL      timetypes.GoDuration `tfsdk:"response_ttl"`
 	Expiry           timetypes.GoDuration `tfsdk:"expiry"`
 	Start            timetypes.GoDuration `tfsdk:"start"`
+
+	// Account Limits
+	MaxConnections    types.Int64 `tfsdk:"max_connections"`
+	MaxLeafNodes      types.Int64 `tfsdk:"max_leaf_nodes"`
+	MaxData           types.Int64 `tfsdk:"max_data"`
+	MaxPayload        types.Int64 `tfsdk:"max_payload"`
+	MaxSubscriptions  types.Int64 `tfsdk:"max_subscriptions"`
+	MaxImports        types.Int64 `tfsdk:"max_imports"`
+	MaxExports        types.Int64 `tfsdk:"max_exports"`
+	AllowWildcardExports types.Bool `tfsdk:"allow_wildcard_exports"`
+	DisallowBearerToken types.Bool `tfsdk:"disallow_bearer_token"`
+
+	// JetStream Limits
+	MaxMemoryStorage       types.Int64 `tfsdk:"max_memory_storage"`
+	MaxDiskStorage         types.Int64 `tfsdk:"max_disk_storage"`
+	MaxStreams             types.Int64 `tfsdk:"max_streams"`
+	MaxConsumers           types.Int64 `tfsdk:"max_consumers"`
+	MaxAckPending          types.Int64 `tfsdk:"max_ack_pending"`
+	MaxMemoryStreamBytes   types.Int64 `tfsdk:"max_memory_stream_bytes"`
+	MaxDiskStreamBytes     types.Int64 `tfsdk:"max_disk_stream_bytes"`
+	MaxBytesRequired       types.Bool  `tfsdk:"max_bytes_required"`
+
 	JWT              types.String         `tfsdk:"jwt"`
 	Seed             types.String         `tfsdk:"seed"`
 	PublicKey        types.String         `tfsdk:"public_key"`
@@ -132,6 +154,78 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 			"public_key": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Account public key",
+			},
+
+			// Account Limits
+			"max_connections": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum number of active connections (-1 for unlimited)",
+			},
+			"max_leaf_nodes": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum number of active leaf node connections (-1 for unlimited)",
+			},
+			"max_data": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum number of bytes (-1 for unlimited)",
+			},
+			"max_payload": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum message payload in bytes (-1 for unlimited)",
+			},
+			"max_subscriptions": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum number of subscriptions (-1 for unlimited)",
+			},
+			"max_imports": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum number of imports (-1 for unlimited)",
+			},
+			"max_exports": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum number of exports (-1 for unlimited)",
+			},
+			"allow_wildcard_exports": schema.BoolAttribute{
+				Optional:            true,
+				MarkdownDescription: "Allow wildcards in exports",
+			},
+			"disallow_bearer_token": schema.BoolAttribute{
+				Optional:            true,
+				MarkdownDescription: "Disallow user JWTs to be bearer tokens",
+			},
+
+			// JetStream Limits
+			"max_memory_storage": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum bytes stored in memory across all streams (0 for disabled)",
+			},
+			"max_disk_storage": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum bytes stored on disk across all streams (0 for disabled)",
+			},
+			"max_streams": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum number of streams (-1 for unlimited)",
+			},
+			"max_consumers": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum number of consumers (-1 for unlimited)",
+			},
+			"max_ack_pending": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum ack pending of a stream (-1 for unlimited)",
+			},
+			"max_memory_stream_bytes": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum bytes a memory backed stream can have (0 for unlimited)",
+			},
+			"max_disk_stream_bytes": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum bytes a disk backed stream can have (0 for unlimited)",
+			},
+			"max_bytes_required": schema.BoolAttribute{
+				Optional:            true,
+				MarkdownDescription: "Require max bytes to be set for all streams",
 			},
 		},
 	}
@@ -279,6 +373,61 @@ func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest
 		if duration != 0 {
 			accountClaims.NotBefore = time.Now().Add(duration).Unix()
 		}
+	}
+
+	// Set Account Limits
+	if !data.MaxConnections.IsNull() {
+		accountClaims.Limits.Conn = data.MaxConnections.ValueInt64()
+	}
+	if !data.MaxLeafNodes.IsNull() {
+		accountClaims.Limits.LeafNodeConn = data.MaxLeafNodes.ValueInt64()
+	}
+	if !data.MaxData.IsNull() {
+		accountClaims.Limits.Data = data.MaxData.ValueInt64()
+	}
+	if !data.MaxPayload.IsNull() {
+		accountClaims.Limits.Payload = data.MaxPayload.ValueInt64()
+	}
+	if !data.MaxSubscriptions.IsNull() {
+		accountClaims.Limits.Subs = data.MaxSubscriptions.ValueInt64()
+	}
+	if !data.MaxImports.IsNull() {
+		accountClaims.Limits.Imports = data.MaxImports.ValueInt64()
+	}
+	if !data.MaxExports.IsNull() {
+		accountClaims.Limits.Exports = data.MaxExports.ValueInt64()
+	}
+	if !data.AllowWildcardExports.IsNull() {
+		accountClaims.Limits.WildcardExports = data.AllowWildcardExports.ValueBool()
+	}
+	if !data.DisallowBearerToken.IsNull() {
+		accountClaims.Limits.DisallowBearer = data.DisallowBearerToken.ValueBool()
+	}
+
+	// Set JetStream Limits
+	if !data.MaxMemoryStorage.IsNull() {
+		accountClaims.Limits.MemoryStorage = data.MaxMemoryStorage.ValueInt64()
+	}
+	if !data.MaxDiskStorage.IsNull() {
+		accountClaims.Limits.DiskStorage = data.MaxDiskStorage.ValueInt64()
+	}
+	if !data.MaxStreams.IsNull() {
+		accountClaims.Limits.Streams = data.MaxStreams.ValueInt64()
+	}
+	if !data.MaxConsumers.IsNull() {
+		accountClaims.Limits.Consumer = data.MaxConsumers.ValueInt64()
+	}
+	if !data.MaxAckPending.IsNull() {
+		accountClaims.Limits.MaxAckPending = data.MaxAckPending.ValueInt64()
+	}
+	if !data.MaxMemoryStreamBytes.IsNull() {
+		accountClaims.Limits.MemoryMaxStreamBytes = data.MaxMemoryStreamBytes.ValueInt64()
+	}
+	if !data.MaxDiskStreamBytes.IsNull() {
+		accountClaims.Limits.DiskMaxStreamBytes = data.MaxDiskStreamBytes.ValueInt64()
+	}
+	if !data.MaxBytesRequired.IsNull() {
+		accountClaims.Limits.MaxBytesRequired = data.MaxBytesRequired.ValueBool()
 	}
 
 	// Sign the JWT with operator key (already have operatorKP from above)
@@ -440,6 +589,61 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 		if duration != 0 {
 			accountClaims.NotBefore = time.Now().Add(duration).Unix()
 		}
+	}
+
+	// Set Account Limits
+	if !data.MaxConnections.IsNull() {
+		accountClaims.Limits.Conn = data.MaxConnections.ValueInt64()
+	}
+	if !data.MaxLeafNodes.IsNull() {
+		accountClaims.Limits.LeafNodeConn = data.MaxLeafNodes.ValueInt64()
+	}
+	if !data.MaxData.IsNull() {
+		accountClaims.Limits.Data = data.MaxData.ValueInt64()
+	}
+	if !data.MaxPayload.IsNull() {
+		accountClaims.Limits.Payload = data.MaxPayload.ValueInt64()
+	}
+	if !data.MaxSubscriptions.IsNull() {
+		accountClaims.Limits.Subs = data.MaxSubscriptions.ValueInt64()
+	}
+	if !data.MaxImports.IsNull() {
+		accountClaims.Limits.Imports = data.MaxImports.ValueInt64()
+	}
+	if !data.MaxExports.IsNull() {
+		accountClaims.Limits.Exports = data.MaxExports.ValueInt64()
+	}
+	if !data.AllowWildcardExports.IsNull() {
+		accountClaims.Limits.WildcardExports = data.AllowWildcardExports.ValueBool()
+	}
+	if !data.DisallowBearerToken.IsNull() {
+		accountClaims.Limits.DisallowBearer = data.DisallowBearerToken.ValueBool()
+	}
+
+	// Set JetStream Limits
+	if !data.MaxMemoryStorage.IsNull() {
+		accountClaims.Limits.MemoryStorage = data.MaxMemoryStorage.ValueInt64()
+	}
+	if !data.MaxDiskStorage.IsNull() {
+		accountClaims.Limits.DiskStorage = data.MaxDiskStorage.ValueInt64()
+	}
+	if !data.MaxStreams.IsNull() {
+		accountClaims.Limits.Streams = data.MaxStreams.ValueInt64()
+	}
+	if !data.MaxConsumers.IsNull() {
+		accountClaims.Limits.Consumer = data.MaxConsumers.ValueInt64()
+	}
+	if !data.MaxAckPending.IsNull() {
+		accountClaims.Limits.MaxAckPending = data.MaxAckPending.ValueInt64()
+	}
+	if !data.MaxMemoryStreamBytes.IsNull() {
+		accountClaims.Limits.MemoryMaxStreamBytes = data.MaxMemoryStreamBytes.ValueInt64()
+	}
+	if !data.MaxDiskStreamBytes.IsNull() {
+		accountClaims.Limits.DiskMaxStreamBytes = data.MaxDiskStreamBytes.ValueInt64()
+	}
+	if !data.MaxBytesRequired.IsNull() {
+		accountClaims.Limits.MaxBytesRequired = data.MaxBytesRequired.ValueBool()
 	}
 
 	// Sign the JWT with operator key (already have operatorKP from above)
@@ -633,5 +837,26 @@ func (r *AccountResource) ImportState(ctx context.Context, req resource.ImportSt
 	resp.State.SetAttribute(ctx, path.Root("deny_pub"), types.ListNull(types.StringType))
 	resp.State.SetAttribute(ctx, path.Root("deny_sub"), types.ListNull(types.StringType))
 	resp.State.SetAttribute(ctx, path.Root("response_ttl"), timetypes.NewGoDurationNull())
+
+	// Set null for all limit fields
+	resp.State.SetAttribute(ctx, path.Root("max_connections"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_leaf_nodes"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_data"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_payload"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_subscriptions"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_imports"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_exports"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("allow_wildcard_exports"), types.BoolNull())
+	resp.State.SetAttribute(ctx, path.Root("disallow_bearer_token"), types.BoolNull())
+
+	// Set null for JetStream limits
+	resp.State.SetAttribute(ctx, path.Root("max_memory_storage"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_disk_storage"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_streams"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_consumers"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_ack_pending"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_memory_stream_bytes"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_disk_stream_bytes"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_bytes_required"), types.BoolNull())
 }
 

@@ -55,6 +55,50 @@ func TestAccAccountResource_basic(t *testing.T) {
 	})
 }
 
+func TestAccAccountResource_withLimits(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create with limits
+			{
+				Config: testAccAccountResourceConfigWithLimits(),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("natsjwt_account.test", "name", "LimitedAccount"),
+					// Account limits
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_connections", "100"),
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_leaf_nodes", "10"),
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_data", "1073741824"), // 1GB
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_payload", "1048576"), // 1MB
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_subscriptions", "1000"),
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_imports", "50"),
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_exports", "50"),
+					resource.TestCheckResourceAttr("natsjwt_account.test", "allow_wildcard_exports", "false"),
+					resource.TestCheckResourceAttr("natsjwt_account.test", "disallow_bearer_token", "true"),
+					// JetStream limits
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_memory_storage", "536870912"), // 512MB
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_disk_storage", "10737418240"), // 10GB
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_streams", "10"),
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_consumers", "100"),
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_ack_pending", "1000"),
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_memory_stream_bytes", "134217728"), // 128MB
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_disk_stream_bytes", "1073741824"), // 1GB
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_bytes_required", "true"),
+				),
+			},
+			// Update limits
+			{
+				Config: testAccAccountResourceConfigWithUpdatedLimits(),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("natsjwt_account.test", "name", "LimitedAccount"),
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_connections", "200"),
+					resource.TestCheckResourceAttr("natsjwt_account.test", "max_streams", "20"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccAccountResource_withPermissions(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -258,6 +302,76 @@ func testAccCheckAccountSeedFormat(resourceName, attrName string) resource.TestC
 
 		return nil
 	}
+}
+
+func testAccAccountResourceConfigWithLimits() string {
+	return `
+resource "natsjwt_operator" "test" {
+  name                 = "TestOperator"
+  generate_signing_key = true
+}
+
+resource "natsjwt_account" "test" {
+  name          = "LimitedAccount"
+  operator_seed = natsjwt_operator.test.seed
+
+  # Account limits
+  max_connections    = 100
+  max_leaf_nodes     = 10
+  max_data           = 1073741824  # 1GB
+  max_payload        = 1048576     # 1MB
+  max_subscriptions  = 1000
+  max_imports        = 50
+  max_exports        = 50
+  allow_wildcard_exports = false
+  disallow_bearer_token  = true
+
+  # JetStream limits
+  max_memory_storage       = 536870912   # 512MB
+  max_disk_storage         = 10737418240 # 10GB
+  max_streams              = 10
+  max_consumers            = 100
+  max_ack_pending          = 1000
+  max_memory_stream_bytes  = 134217728   # 128MB
+  max_disk_stream_bytes    = 1073741824  # 1GB
+  max_bytes_required       = true
+}
+`
+}
+
+func testAccAccountResourceConfigWithUpdatedLimits() string {
+	return `
+resource "natsjwt_operator" "test" {
+  name                 = "TestOperator"
+  generate_signing_key = true
+}
+
+resource "natsjwt_account" "test" {
+  name          = "LimitedAccount"
+  operator_seed = natsjwt_operator.test.seed
+
+  # Updated account limits
+  max_connections    = 200  # Changed
+  max_leaf_nodes     = 10
+  max_data           = 1073741824
+  max_payload        = 1048576
+  max_subscriptions  = 1000
+  max_imports        = 50
+  max_exports        = 50
+  allow_wildcard_exports = false
+  disallow_bearer_token  = true
+
+  # Updated JetStream limits
+  max_memory_storage       = 536870912
+  max_disk_storage         = 10737418240
+  max_streams              = 20  # Changed
+  max_consumers            = 100
+  max_ack_pending          = 1000
+  max_memory_stream_bytes  = 134217728
+  max_disk_stream_bytes    = 1073741824
+  max_bytes_required       = true
+}
+`
 }
 
 func testAccAccountImportStateIdFunc(resourceName string) resource.ImportStateIdFunc {
