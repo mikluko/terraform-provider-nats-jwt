@@ -89,6 +89,42 @@ func TestAccUserResource_withPermissions(t *testing.T) {
 	})
 }
 
+func TestAccUserResource_withLimits(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create with limits
+			{
+				Config: testAccUserResourceConfigWithLimits(),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("natsjwt_user.test", "name", "LimitedUser"),
+					resource.TestCheckResourceAttr("natsjwt_user.test", "max_subscriptions", "100"),
+					resource.TestCheckResourceAttr("natsjwt_user.test", "max_data", "1048576"), // 1MB
+					resource.TestCheckResourceAttr("natsjwt_user.test", "max_payload", "4096"), // 4KB
+					resource.TestCheckResourceAttr("natsjwt_user.test", "allowed_connection_types.#", "2"),
+					resource.TestCheckResourceAttr("natsjwt_user.test", "allowed_connection_types.0", "STANDARD"),
+					resource.TestCheckResourceAttr("natsjwt_user.test", "allowed_connection_types.1", "WEBSOCKET"),
+				),
+			},
+			// Update limits
+			{
+				Config: testAccUserResourceConfigWithUpdatedLimits(),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("natsjwt_user.test", "name", "LimitedUser"),
+					resource.TestCheckResourceAttr("natsjwt_user.test", "max_subscriptions", "200"),
+					resource.TestCheckResourceAttr("natsjwt_user.test", "max_data", "2097152"), // 2MB
+					resource.TestCheckResourceAttr("natsjwt_user.test", "max_payload", "8192"), // 8KB
+					resource.TestCheckResourceAttr("natsjwt_user.test", "allowed_connection_types.#", "3"),
+					resource.TestCheckResourceAttr("natsjwt_user.test", "allowed_connection_types.0", "STANDARD"),
+					resource.TestCheckResourceAttr("natsjwt_user.test", "allowed_connection_types.1", "WEBSOCKET"),
+					resource.TestCheckResourceAttr("natsjwt_user.test", "allowed_connection_types.2", "MQTT"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccUserResource_withResponsePermissions(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -387,6 +423,58 @@ func testAccCheckUserCredsFormat(resourceName, attrName string) resource.TestChe
 
 		return nil
 	}
+}
+
+func testAccUserResourceConfigWithLimits() string {
+	return `
+resource "natsjwt_operator" "test" {
+  name = "TestOperator"
+}
+
+resource "natsjwt_account" "test" {
+  name          = "TestAccount"
+  operator_seed = natsjwt_operator.test.seed
+}
+
+resource "natsjwt_user" "test" {
+  name         = "LimitedUser"
+  account_seed = natsjwt_account.test.seed
+
+  # User limits
+  max_subscriptions = 100
+  max_data          = 1048576  # 1MB
+  max_payload       = 4096     # 4KB
+
+  # Connection type restrictions
+  allowed_connection_types = ["STANDARD", "WEBSOCKET"]
+}
+`
+}
+
+func testAccUserResourceConfigWithUpdatedLimits() string {
+	return `
+resource "natsjwt_operator" "test" {
+  name = "TestOperator"
+}
+
+resource "natsjwt_account" "test" {
+  name          = "TestAccount"
+  operator_seed = natsjwt_operator.test.seed
+}
+
+resource "natsjwt_user" "test" {
+  name         = "LimitedUser"
+  account_seed = natsjwt_account.test.seed
+
+  # Updated user limits
+  max_subscriptions = 200       # Changed
+  max_data          = 2097152   # 2MB - Changed
+  max_payload       = 8192      # 8KB - Changed
+
+  # Updated connection type restrictions
+  allowed_connection_types = ["STANDARD", "WEBSOCKET", "MQTT"]  # Added MQTT
+}
+`
 }
 
 func testAccUserImportStateIdFunc(resourceName string) resource.ImportStateIdFunc {

@@ -50,8 +50,8 @@ resource "natsjwt_account" "application" {
   # Account limits (optional)
   max_connections   = 1000
   max_subscriptions = 10000
-  max_data          = -1  # Unlimited data
-  max_payload       = 1048576  # 1MB max message size
+  max_data          = -1      # Unlimited data
+  max_payload       = 1048576 # 1MB max message size
 
   # JetStream limits (optional, enables JetStream for this account)
   max_memory_storage = 1073741824  # 1GB memory storage
@@ -80,6 +80,14 @@ resource "natsjwt_user" "app_user" {
   allow_sub = ["app.data.>", "_INBOX.>"]
   deny_pub  = ["app.admin.>"]
   deny_sub  = ["app.admin.>"]
+
+  # User-level limits
+  max_subscriptions = 100       # Max number of subscriptions
+  max_data          = 104857600 # 100MB max data per day
+  max_payload       = 1048576   # 1MB max message size
+
+  # Connection type restrictions - only standard connections
+  allowed_connection_types = ["STANDARD"]
 }
 
 # Create application admin user

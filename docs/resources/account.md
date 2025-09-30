@@ -25,9 +25,26 @@ Manages a NATS JWT Account
 - `allow_pub` (List of String) Publish permissions
 - `allow_pub_response` (Number) Allow publishing to reply subjects
 - `allow_sub` (List of String) Subscribe permissions
+- `allow_wildcard_exports` (Boolean) Allow wildcards in exports
 - `deny_pub` (List of String) Deny publish permissions
 - `deny_sub` (List of String) Deny subscribe permissions
+- `disallow_bearer_token` (Boolean) Disallow user JWTs to be bearer tokens
 - `expiry` (String) Valid until (e.g., '8760h' for 1 year, '0s' for no expiry)
+- `max_ack_pending` (Number) Maximum ack pending of a stream (-1 for unlimited)
+- `max_bytes_required` (Boolean) Require max bytes to be set for all streams
+- `max_connections` (Number) Maximum number of active connections (-1 for unlimited)
+- `max_consumers` (Number) Maximum number of consumers (-1 for unlimited)
+- `max_data` (Number) Maximum number of bytes (-1 for unlimited)
+- `max_disk_storage` (Number) Maximum bytes stored on disk across all streams (0 for disabled)
+- `max_disk_stream_bytes` (Number) Maximum bytes a disk backed stream can have (0 for unlimited)
+- `max_exports` (Number) Maximum number of exports (-1 for unlimited)
+- `max_imports` (Number) Maximum number of imports (-1 for unlimited)
+- `max_leaf_nodes` (Number) Maximum number of active leaf node connections (-1 for unlimited)
+- `max_memory_storage` (Number) Maximum bytes stored in memory across all streams (0 for disabled)
+- `max_memory_stream_bytes` (Number) Maximum bytes a memory backed stream can have (0 for unlimited)
+- `max_payload` (Number) Maximum message payload in bytes (-1 for unlimited)
+- `max_streams` (Number) Maximum number of streams (-1 for unlimited)
+- `max_subscriptions` (Number) Maximum number of subscriptions (-1 for unlimited)
 - `response_ttl` (String) Time limit for response permissions
 - `start` (String) Valid from (e.g., '72h' for 3 days, '0s' for immediately)
 

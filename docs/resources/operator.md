@@ -21,9 +21,11 @@ Manages a NATS JWT Operator
 
 ### Optional
 
+- `create_system_account` (Boolean) Create and manage a system account for this operator
 - `expiry` (String) Valid until (e.g., '8760h' for 1 year, '0s' for no expiry)
 - `generate_signing_key` (Boolean) Generate a signing key with the operator
 - `start` (String) Valid from (e.g., '72h' for 3 days, '0s' for immediately)
+- `system_account_name` (String) Name for the system account (defaults to 'SYS')
 
 ### Read-Only
 
@@ -33,3 +35,6 @@ Manages a NATS JWT Operator
 - `seed` (String, Sensitive) Operator seed (private key)
 - `signing_key` (String) Signing key public key (if generated)
 - `signing_key_seed` (String, Sensitive) Signing key seed (if generated)
+- `system_account` (String) System account public key (if created)
+- `system_account_jwt` (String, Sensitive) System account JWT (if created)
+- `system_account_seed` (String, Sensitive) System account seed (if created)

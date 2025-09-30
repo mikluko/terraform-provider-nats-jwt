@@ -43,12 +43,19 @@ type UserResourceModel struct {
 	Bearer           types.Bool           `tfsdk:"bearer"`
 	Tag              types.List           `tfsdk:"tag"`
 	SourceNetwork    types.List           `tfsdk:"source_network"`
-	Expiry           timetypes.GoDuration `tfsdk:"expiry"`
-	Start            timetypes.GoDuration `tfsdk:"start"`
-	JWT              types.String         `tfsdk:"jwt"`
-	Seed             types.String         `tfsdk:"seed"`
-	PublicKey        types.String         `tfsdk:"public_key"`
-	Creds            types.String         `tfsdk:"creds"`
+
+	// User Limits
+	MaxSubscriptions       types.Int64 `tfsdk:"max_subscriptions"`
+	MaxData                types.Int64 `tfsdk:"max_data"`
+	MaxPayload             types.Int64 `tfsdk:"max_payload"`
+	AllowedConnectionTypes types.List  `tfsdk:"allowed_connection_types"`
+
+	Expiry    timetypes.GoDuration `tfsdk:"expiry"`
+	Start     timetypes.GoDuration `tfsdk:"start"`
+	JWT       types.String         `tfsdk:"jwt"`
+	Seed      types.String         `tfsdk:"seed"`
+	PublicKey types.String         `tfsdk:"public_key"`
+	Creds     types.String         `tfsdk:"creds"`
 }
 
 func (r *UserResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -158,6 +165,25 @@ func (r *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Computed:            true,
 				Sensitive:           true,
 				MarkdownDescription: "Credentials string containing JWT and seed for NATS client connection",
+			},
+
+			// User Limits
+			"max_subscriptions": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum number of subscriptions (-1 for unlimited)",
+			},
+			"max_data": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum number of bytes (-1 for unlimited)",
+			},
+			"max_payload": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Maximum message payload in bytes (-1 for unlimited)",
+			},
+			"allowed_connection_types": schema.ListAttribute{
+				ElementType:         types.StringType,
+				Optional:            true,
+				MarkdownDescription: "Allowed connection types (STANDARD, WEBSOCKET, LEAFNODE, LEAFNODE_WS, MQTT, MQTT_WS, IN_PROCESS)",
 			},
 		},
 	}
@@ -331,6 +357,27 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 		if duration != 0 {
 			userClaims.NotBefore = time.Now().Add(duration).Unix()
 		}
+	}
+
+	// Set User Limits
+	if !data.MaxSubscriptions.IsNull() {
+		userClaims.Limits.Subs = data.MaxSubscriptions.ValueInt64()
+	}
+	if !data.MaxData.IsNull() {
+		userClaims.Limits.Data = data.MaxData.ValueInt64()
+	}
+	if !data.MaxPayload.IsNull() {
+		userClaims.Limits.Payload = data.MaxPayload.ValueInt64()
+	}
+
+	// Set allowed connection types
+	if !data.AllowedConnectionTypes.IsNull() {
+		var connTypes []string
+		resp.Diagnostics.Append(data.AllowedConnectionTypes.ElementsAs(ctx, &connTypes, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		userClaims.AllowedConnectionTypes = connTypes
 	}
 
 	// Sign the JWT with account key
@@ -519,6 +566,27 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		}
 	}
 
+	// Set User Limits
+	if !data.MaxSubscriptions.IsNull() {
+		userClaims.Limits.Subs = data.MaxSubscriptions.ValueInt64()
+	}
+	if !data.MaxData.IsNull() {
+		userClaims.Limits.Data = data.MaxData.ValueInt64()
+	}
+	if !data.MaxPayload.IsNull() {
+		userClaims.Limits.Payload = data.MaxPayload.ValueInt64()
+	}
+
+	// Set allowed connection types
+	if !data.AllowedConnectionTypes.IsNull() {
+		var connTypes []string
+		resp.Diagnostics.Append(data.AllowedConnectionTypes.ElementsAs(ctx, &connTypes, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		userClaims.AllowedConnectionTypes = connTypes
+	}
+
 	// Sign the JWT with account key
 	userJWT, err := userClaims.Encode(accountKP)
 	if err != nil {
@@ -623,7 +691,7 @@ func (r *UserResource) ImportState(ctx context.Context, req resource.ImportState
 	if name != "" {
 		name = strings.ReplaceAll(name, "//", "\x00") // Temporary placeholder
 		name = strings.ReplaceAll(name, "%2F", "/")
-		name = strings.ReplaceAll(name, "\x00", "/")   // Replace placeholder with /
+		name = strings.ReplaceAll(name, "\x00", "/") // Replace placeholder with /
 	} else {
 		name = "imported-user"
 	}
@@ -720,4 +788,10 @@ func (r *UserResource) ImportState(ctx context.Context, req resource.ImportState
 	resp.State.SetAttribute(ctx, path.Root("tag"), types.ListNull(types.StringType))
 	resp.State.SetAttribute(ctx, path.Root("source_network"), types.ListNull(types.StringType))
 	resp.State.SetAttribute(ctx, path.Root("response_ttl"), timetypes.NewGoDurationNull())
+
+	// Set null for user limit fields
+	resp.State.SetAttribute(ctx, path.Root("max_subscriptions"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_data"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("max_payload"), types.Int64Null())
+	resp.State.SetAttribute(ctx, path.Root("allowed_connection_types"), types.ListNull(types.StringType))
 }

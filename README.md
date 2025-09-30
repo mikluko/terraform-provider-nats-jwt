@@ -163,6 +163,15 @@ resource "natsjwt_user" "client" {
 
   allow_pub = [ "app.requests.>" ]
   allow_sub = [ "app.responses.>", "_INBOX.>" ]
+
+  # Optional user-level limits
+  max_subscriptions = 100       # Max number of subscriptions
+  max_data          = 104857600 # 100MB max data per day
+  max_payload       = 1048576   # 1MB max message size
+
+  # Connection type restrictions (optional)
+  # Valid types: STANDARD, WEBSOCKET, LEAFNODE, LEAFNODE_WS, MQTT, MQTT_WS, IN_PROCESS
+  allowed_connection_types = ["STANDARD", "WEBSOCKET"]
 }
 ```
 

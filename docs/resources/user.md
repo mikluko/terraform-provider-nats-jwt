@@ -25,10 +25,14 @@ Manages a NATS JWT User
 - `allow_pub` (List of String) Publish permissions
 - `allow_pub_response` (Number) Allow publishing to reply subjects
 - `allow_sub` (List of String) Subscribe permissions
+- `allowed_connection_types` (List of String) Allowed connection types (STANDARD, WEBSOCKET, LEAFNODE, LEAFNODE_WS, MQTT, MQTT_WS, IN_PROCESS)
 - `bearer` (Boolean) No connect challenge required for user
 - `deny_pub` (List of String) Deny publish permissions
 - `deny_sub` (List of String) Deny subscribe permissions
 - `expiry` (String) Valid until (e.g., '720h' for 30 days, '0s' for no expiry)
+- `max_data` (Number) Maximum number of bytes (-1 for unlimited)
+- `max_payload` (Number) Maximum message payload in bytes (-1 for unlimited)
+- `max_subscriptions` (Number) Maximum number of subscriptions (-1 for unlimited)
 - `response_ttl` (String) Time limit for response permissions
 - `source_network` (List of String) Source network for connection
 - `start` (String) Valid from (e.g., '72h' for 3 days, '0s' for immediately)
