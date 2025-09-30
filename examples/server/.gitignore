@@ -1,0 +1,4 @@
+*.creds
+*.conf
+*.tfstate
+*.tfstate.backup

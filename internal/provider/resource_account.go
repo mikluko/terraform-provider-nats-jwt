@@ -166,7 +166,16 @@ func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	// Get operator public key from seed
-	operatorKP, err := nkeys.FromSeed([]byte(data.OperatorSeed.ValueString()))
+	operatorSeedStr := data.OperatorSeed.ValueString()
+	if !strings.HasPrefix(operatorSeedStr, "SO") {
+		resp.Diagnostics.AddError(
+			"Invalid operator seed",
+			fmt.Sprintf("Operator seed must start with 'SO', got: %s...", operatorSeedStr[:2]),
+		)
+		return
+	}
+
+	operatorKP, err := nkeys.FromSeed([]byte(operatorSeedStr))
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to restore operator keypair", err.Error())
 		return
@@ -175,6 +184,15 @@ func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest
 	operatorPubKey, err := operatorKP.PublicKey()
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get operator public key", err.Error())
+		return
+	}
+
+	// Validate it's actually an operator key
+	if !strings.HasPrefix(operatorPubKey, "O") {
+		resp.Diagnostics.AddError(
+			"Invalid operator seed",
+			fmt.Sprintf("Seed does not generate an operator public key (expected O*, got %s)", operatorPubKey),
+		)
 		return
 	}
 
@@ -278,9 +296,6 @@ func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest
 
 	tflog.Trace(ctx, "created account resource")
 
-	// TODO: Implement automatic push to NATS in future version
-	// Requires proper NATS server configuration with resolver that handles
-	// $SYS.REQ.CLAIMS.UPDATE or $SYS.REQ.ACCOUNT.<key>.CLAIMS.UPDATE requests
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -312,7 +327,16 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	// Get operator public key from seed
-	operatorKP, err := nkeys.FromSeed([]byte(data.OperatorSeed.ValueString()))
+	operatorSeedStr := data.OperatorSeed.ValueString()
+	if !strings.HasPrefix(operatorSeedStr, "SO") {
+		resp.Diagnostics.AddError(
+			"Invalid operator seed",
+			fmt.Sprintf("Operator seed must start with 'SO', got: %s...", operatorSeedStr[:2]),
+		)
+		return
+	}
+
+	operatorKP, err := nkeys.FromSeed([]byte(operatorSeedStr))
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to restore operator keypair", err.Error())
 		return
@@ -321,6 +345,15 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 	operatorPubKey, err := operatorKP.PublicKey()
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get operator public key", err.Error())
+		return
+	}
+
+	// Validate it's actually an operator key
+	if !strings.HasPrefix(operatorPubKey, "O") {
+		resp.Diagnostics.AddError(
+			"Invalid operator seed",
+			fmt.Sprintf("Seed does not generate an operator public key (expected O*, got %s)", operatorPubKey),
+		)
 		return
 	}
 
@@ -424,7 +457,6 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	tflog.Trace(ctx, "updated account resource")
 
-	// TODO: Implement automatic push to NATS in future version
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -603,4 +635,3 @@ func (r *AccountResource) ImportState(ctx context.Context, req resource.ImportSt
 	resp.State.SetAttribute(ctx, path.Root("response_ttl"), timetypes.NewGoDurationNull())
 }
 
-// pushAccountToNATS pushes an account JWT to the configured NATS server

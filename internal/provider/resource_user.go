@@ -199,7 +199,16 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 	userClaims.Name = data.Name.ValueString()
 
 	// Get account public key from seed
-	accountKP, err := nkeys.FromSeed([]byte(data.AccountSeed.ValueString()))
+	accountSeedStr := data.AccountSeed.ValueString()
+	if !strings.HasPrefix(accountSeedStr, "SA") {
+		resp.Diagnostics.AddError(
+			"Invalid account seed",
+			fmt.Sprintf("Account seed must start with 'SA', got: %s...", accountSeedStr[:2]),
+		)
+		return
+	}
+
+	accountKP, err := nkeys.FromSeed([]byte(accountSeedStr))
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to restore account keypair", err.Error())
 		return
@@ -208,6 +217,15 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 	accountPubKey, err := accountKP.PublicKey()
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get account public key", err.Error())
+		return
+	}
+
+	// Validate it's actually an account key
+	if !strings.HasPrefix(accountPubKey, "A") {
+		resp.Diagnostics.AddError(
+			"Invalid account seed",
+			fmt.Sprintf("Seed does not generate an account public key (expected A*, got %s)", accountPubKey),
+		)
 		return
 	}
 	userClaims.IssuerAccount = accountPubKey
@@ -367,7 +385,16 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	userClaims.Name = data.Name.ValueString()
 
 	// Get account public key from seed
-	accountKP, err := nkeys.FromSeed([]byte(data.AccountSeed.ValueString()))
+	accountSeedStr := data.AccountSeed.ValueString()
+	if !strings.HasPrefix(accountSeedStr, "SA") {
+		resp.Diagnostics.AddError(
+			"Invalid account seed",
+			fmt.Sprintf("Account seed must start with 'SA', got: %s...", accountSeedStr[:2]),
+		)
+		return
+	}
+
+	accountKP, err := nkeys.FromSeed([]byte(accountSeedStr))
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to restore account keypair", err.Error())
 		return
@@ -376,6 +403,15 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	accountPubKey, err := accountKP.PublicKey()
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get account public key", err.Error())
+		return
+	}
+
+	// Validate it's actually an account key
+	if !strings.HasPrefix(accountPubKey, "A") {
+		resp.Diagnostics.AddError(
+			"Invalid account seed",
+			fmt.Sprintf("Seed does not generate an account public key (expected A*, got %s)", accountPubKey),
+		)
 		return
 	}
 	userClaims.IssuerAccount = accountPubKey

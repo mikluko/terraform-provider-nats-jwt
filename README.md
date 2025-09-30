@@ -6,12 +6,63 @@ Terraform provider for managing NATS JWT authentication tokens and related resou
 
 - Generate and manage NATS Operator, Account, and User JWTs
 - All keys and JWTs stored in Terraform state (compatible with Terraform Cloud)
-- Support for JWT imports/exports and permissions
+- Basic permission model with allow/deny for publish and subscribe
+- Support for bearer tokens and response permissions
+- Automatic generation of user credential files
 
 ### Future Enhancements
 
-- **Automatic JWT Push to NATS**: Support for automatically pushing account JWTs to NATS servers
-  when configured.
+- **Account Imports/Exports**: Support for cross-account communication
+- **Account Limits**: Connection, payload, and other resource limits
+- **Signing Key Management**: Key rotation and revocation support
+- **File-based Resolver**: Support for file-based JWT resolution
+
+## Versioning
+
+This project uses [EffVer (Intended Effort Versioning)](https://jacobtomlinson.dev/effver/) for version management.
+
+EffVer communicates the expected effort for users to adopt a new version, rather than the type of changes made.
+
+### Version Format: `MACRO.MESO.MICRO`
+
+- **MACRO**: Significant effort required - major breaking changes or overhauls
+- **MESO**: Some effort required - minor breaking changes or larger features
+- **MICRO**: No effort required - small fixes or features
+
+### Next Version Guidelines
+
+When choosing the next version number, consider the effort required by users:
+
+1. **Increment MICRO** when:
+   - Fixing bugs that don't change behavior
+   - Adding small features that are fully backward compatible
+   - Documentation improvements
+   - Performance optimizations with no API changes
+   - **Users can upgrade without any changes**
+
+2. **Increment MESO** when:
+   - Adding new resources or data sources (users may want to adopt them)
+   - Changing default values
+   - Deprecating features (not removing)
+   - Minor breaking changes with clear migration paths
+   - **Users may need small adjustments or testing**
+
+3. **Increment MACRO** when:
+   - Removing resources, attributes, or features
+   - Major architectural changes
+   - Changes requiring manual state migration
+   - Incompatible provider configuration changes
+   - **Users need significant time and effort to upgrade**
+
+## Architecture Decision Records
+
+Important design decisions are documented in the `docs/adr/` directory. These ADRs explain key architectural choices and trade-offs:
+
+- [ADR-001](docs/adr/001-system-account-creation-strategy.md) - System Account Creation Strategy (Superseded)
+- [ADR-002](docs/adr/002-system-account-reference-strategy.md) - System Account Reference Strategy (Superseded)
+- [ADR-003](docs/adr/003-system-account-circular-dependency-resolution.md) - System Account Circular Dependency Resolution (Current)
+
+Please review these documents to understand the design philosophy and decision rationale.
 
 ## Development
 
@@ -76,17 +127,11 @@ TF_ACC=1 go test ./internal/provider -v -run TestIntegration_ProviderPush
 
 ### Provider Configuration
 
-The provider supports optional NATS server configuration for automatic account JWT pushing:
+The provider requires no configuration:
 
 ```hcl
 provider "natsjwt" {
-  # Optional: Configure NATS servers for automatic account pushing
-  servers = [ "nats://localhost:4222" ]
-
-  # Authentication credentials (required if servers are specified)
-  # Should be a user with system account permissions
-  jwt  = "eyJ0eXAiOiJKV1QiLCJhbGciOiJlZDI1NTE5LW5rZXkifQ..."
-  seed = "SUABC123..."
+  # No configuration required
 }
 ```
 
@@ -120,20 +165,33 @@ resource "natsjwt_user" "client" {
 }
 ```
 
-### With Automatic Account Pushing
+### With System Account User
 
 ```hcl
-# Configure provider with NATS connection
-provider "natsjwt" {
-  servers = [ "nats://nats1.example.com:4222", "nats://nats2.example.com:4222" ]
-  jwt  = var.system_user_jwt
-  seed = var.system_user_seed
+# Operator includes integrated system account
+resource "natsjwt_operator" "main" {
+  name                  = "MyOperator"
+  generate_signing_key  = true
+  create_system_account = true
 }
 
-# Accounts will be automatically pushed to configured NATS servers
-resource "natsjwt_account" "auto_pushed" {
-  name          = "AutoPushedAccount"
+# Create a user in the system account for monitoring
+resource "natsjwt_user" "sys_admin" {
+  name         = "sys_admin"
+  account_seed = natsjwt_operator.main.system_account_seed
+
+  # Full permissions for system monitoring
+  allow_pub = [">"]
+  allow_sub = [">"]
+}
+
+# Create application account
+resource "natsjwt_account" "app" {
+  name          = "AppAccount"
   operator_seed = natsjwt_operator.main.seed
+
+  allow_pub = ["app.>"]
+  allow_sub = ["app.>", "_INBOX.>"]
 }
 ```
 
@@ -157,3 +215,6 @@ terraform import natsjwt_user.client "app-client/SU.../SA..."
 - Seeds and JWTs are stored in Terraform state - ensure state is encrypted and secured
 - Use environment variables or secure secret management for sensitive values
 - The provider supports Terraform Cloud's remote state storage
+- System account is created automatically with operator when `create_system_account = true`
+- Regular accounts should use appropriate allow/deny lists for security
+- Consider using signing keys for easier key rotation in the future

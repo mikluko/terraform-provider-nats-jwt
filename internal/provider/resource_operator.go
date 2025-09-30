@@ -30,16 +30,21 @@ func NewOperatorResource() resource.Resource {
 type OperatorResource struct{}
 
 type OperatorResourceModel struct {
-	ID                 types.String         `tfsdk:"id"`
-	Name               types.String         `tfsdk:"name"`
-	GenerateSigningKey types.Bool           `tfsdk:"generate_signing_key"`
-	Expiry             timetypes.GoDuration `tfsdk:"expiry"`
-	Start              timetypes.GoDuration `tfsdk:"start"`
-	JWT                types.String         `tfsdk:"jwt"`
-	Seed               types.String         `tfsdk:"seed"`
-	PublicKey          types.String         `tfsdk:"public_key"`
-	SigningKeySeed     types.String         `tfsdk:"signing_key_seed"`
-	SigningKey         types.String         `tfsdk:"signing_key"`
+	ID                   types.String         `tfsdk:"id"`
+	Name                 types.String         `tfsdk:"name"`
+	GenerateSigningKey   types.Bool           `tfsdk:"generate_signing_key"`
+	CreateSystemAccount  types.Bool           `tfsdk:"create_system_account"`
+	SystemAccountName    types.String         `tfsdk:"system_account_name"`
+	Expiry               timetypes.GoDuration `tfsdk:"expiry"`
+	Start                timetypes.GoDuration `tfsdk:"start"`
+	JWT                  types.String         `tfsdk:"jwt"`
+	Seed                 types.String         `tfsdk:"seed"`
+	PublicKey            types.String         `tfsdk:"public_key"`
+	SigningKeySeed       types.String         `tfsdk:"signing_key_seed"`
+	SigningKey           types.String         `tfsdk:"signing_key"`
+	SystemAccount        types.String         `tfsdk:"system_account"`
+	SystemAccountJWT     types.String         `tfsdk:"system_account_jwt"`
+	SystemAccountSeed    types.String         `tfsdk:"system_account_seed"`
 }
 
 func (r *OperatorResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -67,6 +72,18 @@ func (r *OperatorResource) Schema(_ context.Context, req resource.SchemaRequest,
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
 				MarkdownDescription: "Generate a signing key with the operator",
+			},
+			"create_system_account": schema.BoolAttribute{
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(false),
+				MarkdownDescription: "Create and manage a system account for this operator",
+			},
+			"system_account_name": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString("SYS"),
+				MarkdownDescription: "Name for the system account (defaults to 'SYS')",
 			},
 			"expiry": schema.StringAttribute{
 				CustomType:          timetypes.GoDurationType{},
@@ -104,6 +121,20 @@ func (r *OperatorResource) Schema(_ context.Context, req resource.SchemaRequest,
 			"signing_key": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Signing key public key (if generated)",
+			},
+			"system_account": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "System account public key (if created)",
+			},
+			"system_account_jwt": schema.StringAttribute{
+				Computed:            true,
+				Sensitive:           true,
+				MarkdownDescription: "System account JWT (if created)",
+			},
+			"system_account_seed": schema.StringAttribute{
+				Computed:            true,
+				Sensitive:           true,
+				MarkdownDescription: "System account seed (if created)",
 			},
 		},
 	}
@@ -193,6 +224,49 @@ func (r *OperatorResource) Create(ctx context.Context, req resource.CreateReques
 		operatorClaims.SigningKeys.Add(signingKeyPub)
 	}
 
+	// Create system account if requested
+	var systemAccountJWT, systemAccountPubKey string
+	var systemAccountSeed []byte
+	if data.CreateSystemAccount.ValueBool() {
+		// Generate system account key pair
+		sysAccountKP, err := nkeys.CreateAccount()
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to create system account keypair", err.Error())
+			return
+		}
+
+		systemAccountPubKey, err = sysAccountKP.PublicKey()
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to get system account public key", err.Error())
+			return
+		}
+
+		systemAccountSeed, err = sysAccountKP.Seed()
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to get system account seed", err.Error())
+			return
+		}
+
+		// Set system account in operator claims
+		operatorClaims.SystemAccount = systemAccountPubKey
+
+		// Create system account claims
+		sysAccountClaims := jwt.NewAccountClaims(systemAccountPubKey)
+		sysAccountName := "SYS"
+		if !data.SystemAccountName.IsNull() && !data.SystemAccountName.IsUnknown() {
+			sysAccountName = data.SystemAccountName.ValueString()
+		}
+		sysAccountClaims.Name = sysAccountName
+		sysAccountClaims.Issuer = operatorPubKey
+
+		// Sign system account JWT with operator key
+		systemAccountJWT, err = sysAccountClaims.Encode(operatorKP)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to encode system account JWT", err.Error())
+			return
+		}
+	}
+
 	// Sign the JWT
 	operatorJWT, err := operatorClaims.Encode(operatorKP)
 	if err != nil {
@@ -212,6 +286,17 @@ func (r *OperatorResource) Create(ctx context.Context, req resource.CreateReques
 	} else {
 		data.SigningKeySeed = types.StringNull()
 		data.SigningKey = types.StringNull()
+	}
+
+	// Set system account values
+	if data.CreateSystemAccount.ValueBool() {
+		data.SystemAccount = types.StringValue(systemAccountPubKey)
+		data.SystemAccountJWT = types.StringValue(systemAccountJWT)
+		data.SystemAccountSeed = types.StringValue(string(systemAccountSeed))
+	} else {
+		data.SystemAccount = types.StringNull()
+		data.SystemAccountJWT = types.StringNull()
+		data.SystemAccountSeed = types.StringNull()
 	}
 
 	tflog.Trace(ctx, "created operator resource")
@@ -291,6 +376,87 @@ func (r *OperatorResource) Update(ctx context.Context, req resource.UpdateReques
 		operatorClaims.SigningKeys.Add(state.SigningKey.ValueString())
 	}
 
+	// Handle system account
+	if data.CreateSystemAccount.ValueBool() {
+		// If we have an existing system account, preserve it
+		if !state.SystemAccount.IsNull() {
+			operatorClaims.SystemAccount = state.SystemAccount.ValueString()
+		} else {
+			// Create new system account if it doesn't exist
+			sysAccountKP, err := nkeys.CreateAccount()
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to create system account keypair", err.Error())
+				return
+			}
+
+			systemAccountPubKey, err := sysAccountKP.PublicKey()
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to get system account public key", err.Error())
+				return
+			}
+
+			systemAccountSeed, err := sysAccountKP.Seed()
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to get system account seed", err.Error())
+				return
+			}
+
+			operatorClaims.SystemAccount = systemAccountPubKey
+
+			// Create system account claims
+			sysAccountClaims := jwt.NewAccountClaims(systemAccountPubKey)
+			sysAccountName := "SYS"
+			if !data.SystemAccountName.IsNull() && !data.SystemAccountName.IsUnknown() {
+				sysAccountName = data.SystemAccountName.ValueString()
+			}
+			sysAccountClaims.Name = sysAccountName
+			sysAccountClaims.Issuer = operatorPubKey
+
+			// Sign system account JWT
+			systemAccountJWT, err := sysAccountClaims.Encode(operatorKP)
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to encode system account JWT", err.Error())
+				return
+			}
+
+			data.SystemAccount = types.StringValue(systemAccountPubKey)
+			data.SystemAccountJWT = types.StringValue(systemAccountJWT)
+			data.SystemAccountSeed = types.StringValue(string(systemAccountSeed))
+		}
+		// Regenerate system account JWT if exists
+		if !state.SystemAccountSeed.IsNull() {
+			// Validate we can restore the system account key
+			_, err := nkeys.FromSeed([]byte(state.SystemAccountSeed.ValueString()))
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to restore system account keypair", err.Error())
+				return
+			}
+
+			// Recreate system account claims
+			sysAccountClaims := jwt.NewAccountClaims(state.SystemAccount.ValueString())
+			sysAccountName := "SYS"
+			if !data.SystemAccountName.IsNull() && !data.SystemAccountName.IsUnknown() {
+				sysAccountName = data.SystemAccountName.ValueString()
+			}
+			sysAccountClaims.Name = sysAccountName
+			sysAccountClaims.Issuer = operatorPubKey
+
+			// Re-sign system account JWT
+			systemAccountJWT, err := sysAccountClaims.Encode(operatorKP)
+			if err != nil {
+				resp.Diagnostics.AddError("Failed to encode system account JWT", err.Error())
+				return
+			}
+
+			data.SystemAccountJWT = types.StringValue(systemAccountJWT)
+		}
+	} else {
+		// Clear system account if not requested
+		data.SystemAccount = types.StringNull()
+		data.SystemAccountJWT = types.StringNull()
+		data.SystemAccountSeed = types.StringNull()
+	}
+
 	// Sign the JWT
 	operatorJWT, err := operatorClaims.Encode(operatorKP)
 	if err != nil {
@@ -305,6 +471,13 @@ func (r *OperatorResource) Update(ctx context.Context, req resource.UpdateReques
 	data.JWT = types.StringValue(operatorJWT)
 	data.SigningKeySeed = state.SigningKeySeed
 	data.SigningKey = state.SigningKey
+
+	// Preserve system account if not set above
+	if data.SystemAccount.IsNull() {
+		data.SystemAccount = state.SystemAccount
+		data.SystemAccountJWT = state.SystemAccountJWT
+		data.SystemAccountSeed = state.SystemAccountSeed
+	}
 
 	tflog.Trace(ctx, "updated operator resource")
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -413,6 +586,8 @@ func (r *OperatorResource) ImportState(ctx context.Context, req resource.ImportS
 	resp.State.SetAttribute(ctx, path.Root("seed"), types.StringValue(operatorSeed))
 	resp.State.SetAttribute(ctx, path.Root("name"), types.StringValue(name))
 	resp.State.SetAttribute(ctx, path.Root("generate_signing_key"), types.BoolValue(signingKeySeed != ""))
+	resp.State.SetAttribute(ctx, path.Root("create_system_account"), types.BoolValue(false))
+	resp.State.SetAttribute(ctx, path.Root("system_account_name"), types.StringValue("SYS"))
 	resp.State.SetAttribute(ctx, path.Root("expiry"), timetypes.NewGoDurationValue(0))
 	resp.State.SetAttribute(ctx, path.Root("start"), timetypes.NewGoDurationValue(0))
 
@@ -457,4 +632,9 @@ func (r *OperatorResource) ImportState(ctx context.Context, req resource.ImportS
 		return
 	}
 	resp.State.SetAttribute(ctx, path.Root("jwt"), types.StringValue(operatorJWT))
+
+	// Set system account fields to null (no system account imported)
+	resp.State.SetAttribute(ctx, path.Root("system_account"), types.StringNull())
+	resp.State.SetAttribute(ctx, path.Root("system_account_jwt"), types.StringNull())
+	resp.State.SetAttribute(ctx, path.Root("system_account_seed"), types.StringNull())
 }
