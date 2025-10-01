@@ -30,6 +30,8 @@ Manages a NATS JWT Account
 - `deny_sub` (List of String) Deny subscribe permissions
 - `disallow_bearer_token` (Boolean) Disallow user JWTs to be bearer tokens
 - `expiry` (String) Valid until (e.g., '8760h' for 1 year, '0s' for no expiry)
+- `export` (Block List) Exports this account provides to other accounts (see [below for nested schema](#nestedblock--export))
+- `import` (Block List) Imports from other accounts (see [below for nested schema](#nestedblock--import))
 - `max_ack_pending` (Number) Maximum ack pending of a stream (-1 for unlimited)
 - `max_bytes_required` (Boolean) Require max bytes to be set for all streams
 - `max_connections` (Number) Maximum number of active connections (-1 for unlimited)
@@ -54,3 +56,40 @@ Manages a NATS JWT Account
 - `jwt` (String, Sensitive) Generated JWT token
 - `public_key` (String) Account public key
 - `seed` (String, Sensitive) Account seed (private key)
+
+<a id="nestedblock--export"></a>
+### Nested Schema for `export`
+
+Required:
+
+- `subject` (String) Subject pattern to export
+- `type` (String) Export type: 'stream' for pub/sub or 'service' for request/reply
+
+Optional:
+
+- `advertise` (Boolean) Advertise this export publicly
+- `allow_trace` (Boolean) Allow tracing for this export
+- `description` (String) Export description
+- `info_url` (String) URL with more information about this export
+- `name` (String) Export name
+- `response_threshold` (String) Maximum time to wait for service response (e.g., '5s')
+- `response_type` (String) Service response type: 'Singleton' (single response), 'Stream' (multiple responses), or 'Chunked' (chunked single response)
+- `token_required` (Boolean) Whether importing accounts need an activation token
+
+
+<a id="nestedblock--import"></a>
+### Nested Schema for `import`
+
+Required:
+
+- `account` (String) Public key of the exporting account
+- `subject` (String) Subject pattern from the exporting account's perspective
+- `type` (String) Import type: 'stream' for pub/sub or 'service' for request/reply
+
+Optional:
+
+- `allow_trace` (Boolean) Allow tracing for this import
+- `local_subject` (String) Local subject mapping (can use $1, $2 for wildcard references)
+- `name` (String) Import name
+- `share` (Boolean) Share imported service across queue subscribers
+- `token` (String, Sensitive) Activation token if required by the export
