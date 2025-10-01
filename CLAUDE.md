@@ -20,14 +20,14 @@ go build -o terraform-provider-nsc
 # Unit tests
 go test ./...
 
-# Integration tests (requires NATSJWT_TEST_OPERATOR_SEED environment variable)
-TF_ACC=1 go test ./internal/provider -v
+# Integration tests
+go test ./internal/provider -v
 
 # Run specific test
-TF_ACC=1 go test ./internal/provider -v -run TestIntegration_ProviderPush
+go test ./internal/provider -v -run TestIntegration_ProviderPush
 
 # Run single test with timeout
-TF_ACC=1 go test ./internal/provider -v -count=1 -run TestAccUserResource_basic -timeout 30s
+go test ./internal/provider -v -count=1 -run TestAccUserResource_basic -timeout 30s
 ```
 
 ### Generate Test Operator Seed
