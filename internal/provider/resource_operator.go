@@ -30,21 +30,21 @@ func NewOperatorResource() resource.Resource {
 type OperatorResource struct{}
 
 type OperatorResourceModel struct {
-	ID                   types.String         `tfsdk:"id"`
-	Name                 types.String         `tfsdk:"name"`
-	GenerateSigningKey   types.Bool           `tfsdk:"generate_signing_key"`
-	CreateSystemAccount  types.Bool           `tfsdk:"create_system_account"`
-	SystemAccountName    types.String         `tfsdk:"system_account_name"`
-	Expiry               timetypes.GoDuration `tfsdk:"expiry"`
-	Start                timetypes.GoDuration `tfsdk:"start"`
-	JWT                  types.String         `tfsdk:"jwt"`
-	Seed                 types.String         `tfsdk:"seed"`
-	PublicKey            types.String         `tfsdk:"public_key"`
-	SigningKeySeed       types.String         `tfsdk:"signing_key_seed"`
-	SigningKey           types.String         `tfsdk:"signing_key"`
-	SystemAccount        types.String         `tfsdk:"system_account"`
-	SystemAccountJWT     types.String         `tfsdk:"system_account_jwt"`
-	SystemAccountSeed    types.String         `tfsdk:"system_account_seed"`
+	ID                  types.String         `tfsdk:"id"`
+	Name                types.String         `tfsdk:"name"`
+	GenerateSigningKey  types.Bool           `tfsdk:"generate_signing_key"`
+	CreateSystemAccount types.Bool           `tfsdk:"create_system_account"`
+	SystemAccountName   types.String         `tfsdk:"system_account_name"`
+	Expiry              timetypes.GoDuration `tfsdk:"expiry"`
+	Start               timetypes.GoDuration `tfsdk:"start"`
+	JWT                 types.String         `tfsdk:"jwt"`
+	Seed                types.String         `tfsdk:"seed"`
+	PublicKey           types.String         `tfsdk:"public_key"`
+	SigningKeySeed      types.String         `tfsdk:"signing_key_seed"`
+	SigningKey          types.String         `tfsdk:"signing_key"`
+	SystemAccount       types.String         `tfsdk:"system_account"`
+	SystemAccountJWT    types.String         `tfsdk:"system_account_jwt"`
+	SystemAccountSeed   types.String         `tfsdk:"system_account_seed"`
 }
 
 func (r *OperatorResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -553,7 +553,7 @@ func (r *OperatorResource) ImportState(ctx context.Context, req resource.ImportS
 	if name != "" {
 		name = strings.ReplaceAll(name, "//", "\x00") // Temporary placeholder
 		name = strings.ReplaceAll(name, "%2F", "/")
-		name = strings.ReplaceAll(name, "\x00", "/")   // Replace placeholder with /
+		name = strings.ReplaceAll(name, "\x00", "/") // Replace placeholder with /
 	} else {
 		name = "imported-operator"
 	}

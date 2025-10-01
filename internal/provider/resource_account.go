@@ -43,29 +43,29 @@ type AccountResourceModel struct {
 	Start            timetypes.GoDuration `tfsdk:"start"`
 
 	// Account Limits
-	MaxConnections    types.Int64 `tfsdk:"max_connections"`
-	MaxLeafNodes      types.Int64 `tfsdk:"max_leaf_nodes"`
-	MaxData           types.Int64 `tfsdk:"max_data"`
-	MaxPayload        types.Int64 `tfsdk:"max_payload"`
-	MaxSubscriptions  types.Int64 `tfsdk:"max_subscriptions"`
-	MaxImports        types.Int64 `tfsdk:"max_imports"`
-	MaxExports        types.Int64 `tfsdk:"max_exports"`
-	AllowWildcardExports types.Bool `tfsdk:"allow_wildcard_exports"`
-	DisallowBearerToken types.Bool `tfsdk:"disallow_bearer_token"`
+	MaxConnections       types.Int64 `tfsdk:"max_connections"`
+	MaxLeafNodes         types.Int64 `tfsdk:"max_leaf_nodes"`
+	MaxData              types.Int64 `tfsdk:"max_data"`
+	MaxPayload           types.Int64 `tfsdk:"max_payload"`
+	MaxSubscriptions     types.Int64 `tfsdk:"max_subscriptions"`
+	MaxImports           types.Int64 `tfsdk:"max_imports"`
+	MaxExports           types.Int64 `tfsdk:"max_exports"`
+	AllowWildcardExports types.Bool  `tfsdk:"allow_wildcard_exports"`
+	DisallowBearerToken  types.Bool  `tfsdk:"disallow_bearer_token"`
 
 	// JetStream Limits
-	MaxMemoryStorage       types.Int64 `tfsdk:"max_memory_storage"`
-	MaxDiskStorage         types.Int64 `tfsdk:"max_disk_storage"`
-	MaxStreams             types.Int64 `tfsdk:"max_streams"`
-	MaxConsumers           types.Int64 `tfsdk:"max_consumers"`
-	MaxAckPending          types.Int64 `tfsdk:"max_ack_pending"`
-	MaxMemoryStreamBytes   types.Int64 `tfsdk:"max_memory_stream_bytes"`
-	MaxDiskStreamBytes     types.Int64 `tfsdk:"max_disk_stream_bytes"`
-	MaxBytesRequired       types.Bool  `tfsdk:"max_bytes_required"`
+	MaxMemoryStorage     types.Int64 `tfsdk:"max_memory_storage"`
+	MaxDiskStorage       types.Int64 `tfsdk:"max_disk_storage"`
+	MaxStreams           types.Int64 `tfsdk:"max_streams"`
+	MaxConsumers         types.Int64 `tfsdk:"max_consumers"`
+	MaxAckPending        types.Int64 `tfsdk:"max_ack_pending"`
+	MaxMemoryStreamBytes types.Int64 `tfsdk:"max_memory_stream_bytes"`
+	MaxDiskStreamBytes   types.Int64 `tfsdk:"max_disk_stream_bytes"`
+	MaxBytesRequired     types.Bool  `tfsdk:"max_bytes_required"`
 
-	JWT              types.String         `tfsdk:"jwt"`
-	Seed             types.String         `tfsdk:"seed"`
-	PublicKey        types.String         `tfsdk:"public_key"`
+	JWT       types.String `tfsdk:"jwt"`
+	Seed      types.String `tfsdk:"seed"`
+	PublicKey types.String `tfsdk:"public_key"`
 }
 
 func (r *AccountResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -230,7 +230,6 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 		},
 	}
 }
-
 
 func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data AccountResourceModel
@@ -444,7 +443,6 @@ func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest
 	data.JWT = types.StringValue(accountJWT)
 
 	tflog.Trace(ctx, "created account resource")
-
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -661,7 +659,6 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	tflog.Trace(ctx, "updated account resource")
 
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -748,7 +745,7 @@ func (r *AccountResource) ImportState(ctx context.Context, req resource.ImportSt
 	if name != "" {
 		name = strings.ReplaceAll(name, "//", "\x00") // Temporary placeholder
 		name = strings.ReplaceAll(name, "%2F", "/")
-		name = strings.ReplaceAll(name, "\x00", "/")   // Replace placeholder with /
+		name = strings.ReplaceAll(name, "\x00", "/") // Replace placeholder with /
 	} else {
 		name = "imported-account"
 	}
@@ -859,4 +856,3 @@ func (r *AccountResource) ImportState(ctx context.Context, req resource.ImportSt
 	resp.State.SetAttribute(ctx, path.Root("max_disk_stream_bytes"), types.Int64Null())
 	resp.State.SetAttribute(ctx, path.Root("max_bytes_required"), types.BoolNull())
 }
-
