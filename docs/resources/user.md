@@ -42,6 +42,6 @@ Manages a NATS JWT User
 
 - `creds` (String, Sensitive) Credentials string containing JWT and seed for NATS client connection
 - `id` (String) User identifier (public key)
-- `jwt` (String, Sensitive) Generated JWT token
+- `jwt` (String) Generated JWT token
 - `public_key` (String) User public key
 - `seed` (String, Sensitive) User seed (private key)

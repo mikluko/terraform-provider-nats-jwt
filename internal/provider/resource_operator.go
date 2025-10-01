@@ -101,7 +101,6 @@ func (r *OperatorResource) Schema(_ context.Context, req resource.SchemaRequest,
 			},
 			"jwt": schema.StringAttribute{
 				Computed:            true,
-				Sensitive:           true,
 				MarkdownDescription: "Generated JWT token",
 			},
 			"seed": schema.StringAttribute{
@@ -128,7 +127,6 @@ func (r *OperatorResource) Schema(_ context.Context, req resource.SchemaRequest,
 			},
 			"system_account_jwt": schema.StringAttribute{
 				Computed:            true,
-				Sensitive:           true,
 				MarkdownDescription: "System account JWT (if created)",
 			},
 			"system_account_seed": schema.StringAttribute{

@@ -149,7 +149,6 @@ func (r *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			},
 			"jwt": schema.StringAttribute{
 				Computed:            true,
-				Sensitive:           true,
 				MarkdownDescription: "Generated JWT token",
 			},
 			"seed": schema.StringAttribute{

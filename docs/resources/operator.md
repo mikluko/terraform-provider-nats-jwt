@@ -30,11 +30,11 @@ Manages a NATS JWT Operator
 ### Read-Only
 
 - `id` (String) Operator identifier (public key)
-- `jwt` (String, Sensitive) Generated JWT token
+- `jwt` (String) Generated JWT token
 - `public_key` (String) Operator public key
 - `seed` (String, Sensitive) Operator seed (private key)
 - `signing_key` (String) Signing key public key (if generated)
 - `signing_key_seed` (String, Sensitive) Signing key seed (if generated)
 - `system_account` (String) System account public key (if created)
-- `system_account_jwt` (String, Sensitive) System account JWT (if created)
+- `system_account_jwt` (String) System account JWT (if created)
 - `system_account_seed` (String, Sensitive) System account seed (if created)

@@ -53,7 +53,7 @@ Manages a NATS JWT Account
 ### Read-Only
 
 - `id` (String) Account identifier (public key)
-- `jwt` (String, Sensitive) Generated JWT token
+- `jwt` (String) Generated JWT token
 - `public_key` (String) Account public key
 - `seed` (String, Sensitive) Account seed (private key)
 
