@@ -43,6 +43,8 @@ func (p *NSCProvider) Resources(ctx context.Context) []func() resource.Resource 
 	return []func() resource.Resource{
 		NewOperatorResource,
 		NewAccountResource,
+		NewAccountKeyResource,
+		NewAccountJWTResource,
 		NewUserResource,
 	}
 }
