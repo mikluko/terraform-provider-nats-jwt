@@ -396,3 +396,99 @@ func testAccAccountImportStateIdFunc(resourceName string) resource.ImportStateId
 		return fmt.Sprintf("%s/%s", name, seed), nil
 	}
 }
+
+func TestAccAccountResource_withExports(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAccountResourceConfigWithExports(),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("nsc_account.test", "name", "ExportAccount"),
+					resource.TestCheckResourceAttr("nsc_account.test", "exports.#", "2"),
+					resource.TestCheckResourceAttr("nsc_account.test", "exports.0.subject", "events.>"),
+					resource.TestCheckResourceAttr("nsc_account.test", "exports.0.type", "stream"),
+					resource.TestCheckResourceAttr("nsc_account.test", "exports.1.subject", "api.requests"),
+					resource.TestCheckResourceAttr("nsc_account.test", "exports.1.type", "service"),
+					resource.TestCheckResourceAttr("nsc_account.test", "exports.1.response_type", "Singleton"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccAccountResource_withImports(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAccountResourceConfigWithImports(),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("nsc_account.provider", "name", "ProviderAccount"),
+					resource.TestCheckResourceAttr("nsc_account.consumer", "name", "ConsumerAccount"),
+					resource.TestCheckResourceAttr("nsc_account.consumer", "imports.#", "1"),
+					resource.TestCheckResourceAttr("nsc_account.consumer", "imports.0.subject", "shared.events.>"),
+					resource.TestCheckResourceAttr("nsc_account.consumer", "imports.0.type", "stream"),
+					resource.TestCheckResourceAttr("nsc_account.consumer", "imports.0.local_subject", "events.>"),
+				),
+			},
+		},
+	})
+}
+
+func testAccAccountResourceConfigWithExports() string {
+	opKP, _ := nkeys.CreateOperator()
+	opSeed, _ := opKP.Seed()
+
+	return fmt.Sprintf(`
+resource "nsc_account" "test" {
+  name          = "ExportAccount"
+  operator_seed = %[1]q
+
+  exports {
+    subject = "events.>"
+    type    = "stream"
+    description = "Event stream export"
+    advertise = true
+  }
+
+  exports {
+    subject = "api.requests"
+    type    = "service"
+    response_type = "Singleton"
+    response_threshold = "5s"
+    token_required = true
+  }
+}
+`, string(opSeed))
+}
+
+func testAccAccountResourceConfigWithImports() string {
+	opKP, _ := nkeys.CreateOperator()
+	opSeed, _ := opKP.Seed()
+
+	// Create provider account to get its public key
+	providerKP, _ := nkeys.CreateAccount()
+	providerPubKey, _ := providerKP.PublicKey()
+
+	return fmt.Sprintf(`
+resource "nsc_account" "provider" {
+  name          = "ProviderAccount"
+  operator_seed = %[1]q
+}
+
+resource "nsc_account" "consumer" {
+  name          = "ConsumerAccount"
+  operator_seed = %[1]q
+
+  imports {
+    subject = "shared.events.>"
+    account = %[2]q
+    type    = "stream"
+    local_subject = "events.>"
+  }
+}
+`, string(opSeed), providerPubKey)
+}

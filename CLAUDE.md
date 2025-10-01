@@ -11,8 +11,14 @@ The provider generates JWT tokens for NATS operators, accounts, and users, with 
 ## Development Commands
 
 ### Build
+Use GoReleaser for building binaries (never use `go build` directly):
+
 ```bash
-go build -o terraform-provider-nsc
+# Build snapshot (development build)
+goreleaser build --snapshot --clean --single-target
+
+# Full release build
+goreleaser release --snapshot --clean
 ```
 
 ### Test

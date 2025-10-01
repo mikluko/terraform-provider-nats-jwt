@@ -29,6 +29,30 @@ func NewAccountResource() resource.Resource {
 
 type AccountResource struct{}
 
+type ExportModel struct {
+	Name              types.String         `tfsdk:"name"`
+	Subject           types.String         `tfsdk:"subject"`
+	Type              types.String         `tfsdk:"type"`
+	TokenRequired     types.Bool           `tfsdk:"token_required"`
+	ResponseType      types.String         `tfsdk:"response_type"`
+	ResponseThreshold timetypes.GoDuration `tfsdk:"response_threshold"`
+	Advertise         types.Bool           `tfsdk:"advertise"`
+	AllowTrace        types.Bool           `tfsdk:"allow_trace"`
+	Description       types.String         `tfsdk:"description"`
+	InfoURL           types.String         `tfsdk:"info_url"`
+}
+
+type ImportModel struct {
+	Name         types.String `tfsdk:"name"`
+	Subject      types.String `tfsdk:"subject"`
+	Account      types.String `tfsdk:"account"`
+	Token        types.String `tfsdk:"token"`
+	LocalSubject types.String `tfsdk:"local_subject"`
+	Type         types.String `tfsdk:"type"`
+	Share        types.Bool   `tfsdk:"share"`
+	AllowTrace   types.Bool   `tfsdk:"allow_trace"`
+}
+
 type AccountResourceModel struct {
 	ID               types.String         `tfsdk:"id"`
 	Name             types.String         `tfsdk:"name"`
@@ -62,6 +86,10 @@ type AccountResourceModel struct {
 	MaxMemoryStreamBytes types.Int64 `tfsdk:"max_memory_stream_bytes"`
 	MaxDiskStreamBytes   types.Int64 `tfsdk:"max_disk_stream_bytes"`
 	MaxBytesRequired     types.Bool  `tfsdk:"max_bytes_required"`
+
+	// Imports/Exports
+	Exports types.List `tfsdk:"exports"`
+	Imports types.List `tfsdk:"imports"`
 
 	JWT       types.String `tfsdk:"jwt"`
 	Seed      types.String `tfsdk:"seed"`
@@ -226,6 +254,96 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 			"max_bytes_required": schema.BoolAttribute{
 				Optional:            true,
 				MarkdownDescription: "Require max bytes to be set for all streams",
+			},
+		},
+		Blocks: map[string]schema.Block{
+			"exports": schema.ListNestedBlock{
+				MarkdownDescription: "List of exports this account provides to other accounts",
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Export name",
+						},
+						"subject": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Subject pattern to export",
+						},
+						"type": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Export type: 'stream' for pub/sub or 'service' for request/reply",
+						},
+						"token_required": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Whether importing accounts need an activation token",
+						},
+						"response_type": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Service response type: 'Singleton' (single response), 'Stream' (multiple responses), or 'Chunked' (chunked single response)",
+						},
+						"response_threshold": schema.StringAttribute{
+							CustomType:          timetypes.GoDurationType{},
+							Optional:            true,
+							MarkdownDescription: "Maximum time to wait for service response (e.g., '5s')",
+						},
+						"advertise": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Advertise this export publicly",
+						},
+						"allow_trace": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Allow tracing for this export",
+						},
+						"description": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Export description",
+						},
+						"info_url": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "URL with more information about this export",
+						},
+					},
+				},
+			},
+			"imports": schema.ListNestedBlock{
+				MarkdownDescription: "List of imports from other accounts",
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Import name",
+						},
+						"subject": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Subject pattern from the exporting account's perspective",
+						},
+						"account": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Public key of the exporting account",
+						},
+						"token": schema.StringAttribute{
+							Optional:            true,
+							Sensitive:           true,
+							MarkdownDescription: "Activation token if required by the export",
+						},
+						"local_subject": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Local subject mapping (can use $1, $2 for wildcard references)",
+						},
+						"type": schema.StringAttribute{
+							Required:            true,
+							MarkdownDescription: "Import type: 'stream' for pub/sub or 'service' for request/reply",
+						},
+						"share": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Share imported service across queue subscribers",
+						},
+						"allow_trace": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Allow tracing for this import",
+						},
+					},
+				},
 			},
 		},
 	}
@@ -427,6 +545,117 @@ func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 	if !data.MaxBytesRequired.IsNull() {
 		accountClaims.Limits.MaxBytesRequired = data.MaxBytesRequired.ValueBool()
+	}
+
+	// Handle exports
+	if !data.Exports.IsNull() && len(data.Exports.Elements()) > 0 {
+		var exports []ExportModel
+		resp.Diagnostics.Append(data.Exports.ElementsAs(ctx, &exports, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		for _, export := range exports {
+			jwtExport := &jwt.Export{
+				Subject: jwt.Subject(export.Subject.ValueString()),
+			}
+
+			// Set export type
+			switch export.Type.ValueString() {
+			case "stream":
+				jwtExport.Type = jwt.Stream
+			case "service":
+				jwtExport.Type = jwt.Service
+			default:
+				resp.Diagnostics.AddError(
+					"Invalid export type",
+					fmt.Sprintf("Export type must be 'stream' or 'service', got: %s", export.Type.ValueString()),
+				)
+				return
+			}
+
+			// Optional fields
+			if !export.Name.IsNull() {
+				jwtExport.Name = export.Name.ValueString()
+			}
+			if !export.TokenRequired.IsNull() {
+				jwtExport.TokenReq = export.TokenRequired.ValueBool()
+			}
+			if !export.ResponseType.IsNull() {
+				jwtExport.ResponseType = jwt.ResponseType(export.ResponseType.ValueString())
+			}
+			if !export.ResponseThreshold.IsNull() && !export.ResponseThreshold.IsUnknown() {
+				duration, diags := export.ResponseThreshold.ValueGoDuration()
+				resp.Diagnostics.Append(diags...)
+				if resp.Diagnostics.HasError() {
+					return
+				}
+				jwtExport.ResponseThreshold = duration
+			}
+			if !export.Advertise.IsNull() {
+				jwtExport.Advertise = export.Advertise.ValueBool()
+			}
+			if !export.AllowTrace.IsNull() {
+				jwtExport.AllowTrace = export.AllowTrace.ValueBool()
+			}
+			if !export.Description.IsNull() {
+				jwtExport.Description = export.Description.ValueString()
+			}
+			if !export.InfoURL.IsNull() {
+				jwtExport.InfoURL = export.InfoURL.ValueString()
+			}
+
+			accountClaims.Exports.Add(jwtExport)
+		}
+	}
+
+	// Handle imports
+	if !data.Imports.IsNull() && len(data.Imports.Elements()) > 0 {
+		var imports []ImportModel
+		resp.Diagnostics.Append(data.Imports.ElementsAs(ctx, &imports, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		for _, imp := range imports {
+			jwtImport := &jwt.Import{
+				Subject: jwt.Subject(imp.Subject.ValueString()),
+				Account: imp.Account.ValueString(),
+			}
+
+			// Set import type
+			switch imp.Type.ValueString() {
+			case "stream":
+				jwtImport.Type = jwt.Stream
+			case "service":
+				jwtImport.Type = jwt.Service
+			default:
+				resp.Diagnostics.AddError(
+					"Invalid import type",
+					fmt.Sprintf("Import type must be 'stream' or 'service', got: %s", imp.Type.ValueString()),
+				)
+				return
+			}
+
+			// Optional fields
+			if !imp.Name.IsNull() {
+				jwtImport.Name = imp.Name.ValueString()
+			}
+			if !imp.Token.IsNull() {
+				jwtImport.Token = imp.Token.ValueString()
+			}
+			if !imp.LocalSubject.IsNull() {
+				jwtImport.LocalSubject = jwt.RenamingSubject(imp.LocalSubject.ValueString())
+			}
+			if !imp.Share.IsNull() {
+				jwtImport.Share = imp.Share.ValueBool()
+			}
+			if !imp.AllowTrace.IsNull() {
+				jwtImport.AllowTrace = imp.AllowTrace.ValueBool()
+			}
+
+			accountClaims.Imports.Add(jwtImport)
+		}
 	}
 
 	// Sign the JWT with operator key (already have operatorKP from above)
@@ -642,6 +871,117 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 	if !data.MaxBytesRequired.IsNull() {
 		accountClaims.Limits.MaxBytesRequired = data.MaxBytesRequired.ValueBool()
+	}
+
+	// Handle exports
+	if !data.Exports.IsNull() && len(data.Exports.Elements()) > 0 {
+		var exports []ExportModel
+		resp.Diagnostics.Append(data.Exports.ElementsAs(ctx, &exports, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		for _, export := range exports {
+			jwtExport := &jwt.Export{
+				Subject: jwt.Subject(export.Subject.ValueString()),
+			}
+
+			// Set export type
+			switch export.Type.ValueString() {
+			case "stream":
+				jwtExport.Type = jwt.Stream
+			case "service":
+				jwtExport.Type = jwt.Service
+			default:
+				resp.Diagnostics.AddError(
+					"Invalid export type",
+					fmt.Sprintf("Export type must be 'stream' or 'service', got: %s", export.Type.ValueString()),
+				)
+				return
+			}
+
+			// Optional fields
+			if !export.Name.IsNull() {
+				jwtExport.Name = export.Name.ValueString()
+			}
+			if !export.TokenRequired.IsNull() {
+				jwtExport.TokenReq = export.TokenRequired.ValueBool()
+			}
+			if !export.ResponseType.IsNull() {
+				jwtExport.ResponseType = jwt.ResponseType(export.ResponseType.ValueString())
+			}
+			if !export.ResponseThreshold.IsNull() && !export.ResponseThreshold.IsUnknown() {
+				duration, diags := export.ResponseThreshold.ValueGoDuration()
+				resp.Diagnostics.Append(diags...)
+				if resp.Diagnostics.HasError() {
+					return
+				}
+				jwtExport.ResponseThreshold = duration
+			}
+			if !export.Advertise.IsNull() {
+				jwtExport.Advertise = export.Advertise.ValueBool()
+			}
+			if !export.AllowTrace.IsNull() {
+				jwtExport.AllowTrace = export.AllowTrace.ValueBool()
+			}
+			if !export.Description.IsNull() {
+				jwtExport.Description = export.Description.ValueString()
+			}
+			if !export.InfoURL.IsNull() {
+				jwtExport.InfoURL = export.InfoURL.ValueString()
+			}
+
+			accountClaims.Exports.Add(jwtExport)
+		}
+	}
+
+	// Handle imports
+	if !data.Imports.IsNull() && len(data.Imports.Elements()) > 0 {
+		var imports []ImportModel
+		resp.Diagnostics.Append(data.Imports.ElementsAs(ctx, &imports, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		for _, imp := range imports {
+			jwtImport := &jwt.Import{
+				Subject: jwt.Subject(imp.Subject.ValueString()),
+				Account: imp.Account.ValueString(),
+			}
+
+			// Set import type
+			switch imp.Type.ValueString() {
+			case "stream":
+				jwtImport.Type = jwt.Stream
+			case "service":
+				jwtImport.Type = jwt.Service
+			default:
+				resp.Diagnostics.AddError(
+					"Invalid import type",
+					fmt.Sprintf("Import type must be 'stream' or 'service', got: %s", imp.Type.ValueString()),
+				)
+				return
+			}
+
+			// Optional fields
+			if !imp.Name.IsNull() {
+				jwtImport.Name = imp.Name.ValueString()
+			}
+			if !imp.Token.IsNull() {
+				jwtImport.Token = imp.Token.ValueString()
+			}
+			if !imp.LocalSubject.IsNull() {
+				jwtImport.LocalSubject = jwt.RenamingSubject(imp.LocalSubject.ValueString())
+			}
+			if !imp.Share.IsNull() {
+				jwtImport.Share = imp.Share.ValueBool()
+			}
+			if !imp.AllowTrace.IsNull() {
+				jwtImport.AllowTrace = imp.AllowTrace.ValueBool()
+			}
+
+			accountClaims.Imports.Add(jwtImport)
+		}
 	}
 
 	// Sign the JWT with operator key (already have operatorKP from above)
