@@ -66,6 +66,26 @@ resource "nsc_account" "system" {
   # Full access for system account
   allow_pub = [">"]
   allow_sub = [">"]
+
+  # System account exports for monitoring
+  export {
+    name                   = "account-monitoring-streams"
+    subject                = "$SYS.ACCOUNT.*.>"
+    type                   = "stream"
+    account_token_position = 3
+    description            = "Account specific monitoring stream"
+    info_url               = "https://docs.nats.io/nats-server/configuration/sys_accounts"
+  }
+
+  export {
+    name                   = "account-monitoring-services"
+    subject                = "$SYS.REQ.ACCOUNT.*.*"
+    type                   = "service"
+    response_type          = "Stream"
+    account_token_position = 4
+    description            = "Request account specific monitoring services for: SUBSZ, CONNZ, LEAFZ, JSZ and INFO"
+    info_url               = "https://docs.nats.io/nats-server/configuration/sys_accounts"
+  }
 }
 
 # Create application account JWT

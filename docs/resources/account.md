@@ -68,6 +68,7 @@ Required:
 
 Optional:
 
+- `account_token_position` (Number) Position in the subject where the account token appears (for multi-tenant exports)
 - `advertise` (Boolean) Advertise this export publicly
 - `allow_trace` (Boolean) Allow tracing for this export
 - `description` (String) Export description

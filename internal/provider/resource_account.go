@@ -30,16 +30,17 @@ func NewAccountResource() resource.Resource {
 type AccountResource struct{}
 
 type ExportModel struct {
-	Name              types.String         `tfsdk:"name"`
-	Subject           types.String         `tfsdk:"subject"`
-	Type              types.String         `tfsdk:"type"`
-	TokenRequired     types.Bool           `tfsdk:"token_required"`
-	ResponseType      types.String         `tfsdk:"response_type"`
-	ResponseThreshold timetypes.GoDuration `tfsdk:"response_threshold"`
-	Advertise         types.Bool           `tfsdk:"advertise"`
-	AllowTrace        types.Bool           `tfsdk:"allow_trace"`
-	Description       types.String         `tfsdk:"description"`
-	InfoURL           types.String         `tfsdk:"info_url"`
+	Name                 types.String         `tfsdk:"name"`
+	Subject              types.String         `tfsdk:"subject"`
+	Type                 types.String         `tfsdk:"type"`
+	TokenRequired        types.Bool           `tfsdk:"token_required"`
+	ResponseType         types.String         `tfsdk:"response_type"`
+	ResponseThreshold    timetypes.GoDuration `tfsdk:"response_threshold"`
+	AccountTokenPosition types.Int64          `tfsdk:"account_token_position"`
+	Advertise            types.Bool           `tfsdk:"advertise"`
+	AllowTrace           types.Bool           `tfsdk:"allow_trace"`
+	Description          types.String         `tfsdk:"description"`
+	InfoURL              types.String         `tfsdk:"info_url"`
 }
 
 type ImportModel struct {
@@ -292,6 +293,10 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 							CustomType:          timetypes.GoDurationType{},
 							Optional:            true,
 							MarkdownDescription: "Maximum time to wait for service response (e.g., '5s')",
+						},
+						"account_token_position": schema.Int64Attribute{
+							Optional:            true,
+							MarkdownDescription: "Position in the subject where the account token appears (for multi-tenant exports)",
 						},
 						"advertise": schema.BoolAttribute{
 							Optional:            true,
@@ -589,6 +594,9 @@ func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest
 					return
 				}
 				jwtExport.ResponseThreshold = duration
+			}
+			if !export.AccountTokenPosition.IsNull() {
+				jwtExport.AccountTokenPosition = uint(export.AccountTokenPosition.ValueInt64())
 			}
 			if !export.Advertise.IsNull() {
 				jwtExport.Advertise = export.Advertise.ValueBool()
@@ -919,6 +927,9 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 					return
 				}
 				jwtExport.ResponseThreshold = duration
+			}
+			if !export.AccountTokenPosition.IsNull() {
+				jwtExport.AccountTokenPosition = uint(export.AccountTokenPosition.ValueInt64())
 			}
 			if !export.Advertise.IsNull() {
 				jwtExport.Advertise = export.Advertise.ValueBool()
