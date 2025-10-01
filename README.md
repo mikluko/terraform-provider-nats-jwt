@@ -1,6 +1,6 @@
-# Terraform Provider for NATS JWT
+# Terraform NSC Provider
 
-Terraform provider for managing NATS JWT authentication tokens and related resources.
+Terraform provider for managing NATS JWT authentication tokens and related resources. Named after the [nsc](https://docs.nats.io/using-nats/nats-tools/nsc) (NATS Security and Configuration) CLI tool.
 
 ## Features
 
@@ -76,7 +76,7 @@ Please review these documents to understand the design philosophy and decision r
 ### Building
 
 ```bash
-go build -o terraform-provider-nats-jwt
+go build -o terraform-provider-nsc
 ```
 
 ### Testing
@@ -142,24 +142,24 @@ provider "natsjwt" {
 
 ```hcl
 # Create operator
-resource "natsjwt_operator" "main" {
+resource "nsc_operator" "main" {
   name                 = "MyOperator"
   generate_signing_key = true
 }
 
 # Create account
-resource "natsjwt_account" "app" {
+resource "nsc_account" "app" {
   name          = "AppAccount"
-  operator_seed = natsjwt_operator.main.seed
+  operator_seed = nsc_operator.main.seed
 
   allow_pub = [ "app.>" ]
   allow_sub = [ "app.>", "_INBOX.>" ]
 }
 
 # Create user
-resource "natsjwt_user" "client" {
+resource "nsc_user" "client" {
   name         = "app-client"
-  account_seed = natsjwt_account.app.seed
+  account_seed = nsc_account.app.seed
 
   allow_pub = [ "app.requests.>" ]
   allow_sub = [ "app.responses.>", "_INBOX.>" ]
@@ -179,16 +179,16 @@ resource "natsjwt_user" "client" {
 
 ```hcl
 # Operator includes integrated system account
-resource "natsjwt_operator" "main" {
+resource "nsc_operator" "main" {
   name                  = "MyOperator"
   generate_signing_key  = true
   create_system_account = true
 }
 
 # Create a user in the system account for monitoring
-resource "natsjwt_user" "sys_admin" {
+resource "nsc_user" "sys_admin" {
   name         = "sys_admin"
-  account_seed = natsjwt_operator.main.system_account_seed
+  account_seed = nsc_operator.main.system_account_seed
 
   # Full permissions for system monitoring
   allow_pub = [">"]
@@ -196,9 +196,9 @@ resource "natsjwt_user" "sys_admin" {
 }
 
 # Create application account
-resource "natsjwt_account" "app" {
+resource "nsc_account" "app" {
   name          = "AppAccount"
-  operator_seed = natsjwt_operator.main.seed
+  operator_seed = nsc_operator.main.seed
 
   allow_pub = ["app.>"]
   allow_sub = ["app.>", "_INBOX.>"]
@@ -211,13 +211,13 @@ Resources support import using the format `name/seed` or `name/seed/parent_seed`
 
 ```bash
 # Import operator
-terraform import natsjwt_operator.main "MyOperator/SO..."
+terraform import nsc_operator.main "MyOperator/SO..."
 
 # Import account
-terraform import natsjwt_account.app "AppAccount/SA.../SO..."
+terraform import nsc_account.app "AppAccount/SA.../SO..."
 
 # Import user
-terraform import natsjwt_user.client "app-client/SU.../SA..."
+terraform import nsc_user.client "app-client/SU.../SA..."
 ```
 
 ## Security Considerations

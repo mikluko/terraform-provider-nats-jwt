@@ -19,23 +19,23 @@ func TestAccAccountResource_basic(t *testing.T) {
 			{
 				Config: testAccAccountResourceConfig("TestAccount"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("natsjwt_account.test", "name", "TestAccount"),
-					resource.TestCheckResourceAttrSet("natsjwt_account.test", "operator_seed"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "expiry", "0s"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "start", "0s"),
-					resource.TestCheckResourceAttrSet("natsjwt_account.test", "jwt"),
-					resource.TestCheckResourceAttrSet("natsjwt_account.test", "seed"),
-					resource.TestCheckResourceAttrSet("natsjwt_account.test", "public_key"),
-					testAccCheckAccountPublicKeyFormat("natsjwt_account.test", "public_key"),
-					testAccCheckAccountSeedFormat("natsjwt_account.test", "seed"),
+					resource.TestCheckResourceAttr("nsc_account.test", "name", "TestAccount"),
+					resource.TestCheckResourceAttrSet("nsc_account.test", "operator_seed"),
+					resource.TestCheckResourceAttr("nsc_account.test", "expiry", "0s"),
+					resource.TestCheckResourceAttr("nsc_account.test", "start", "0s"),
+					resource.TestCheckResourceAttrSet("nsc_account.test", "jwt"),
+					resource.TestCheckResourceAttrSet("nsc_account.test", "seed"),
+					resource.TestCheckResourceAttrSet("nsc_account.test", "public_key"),
+					testAccCheckAccountPublicKeyFormat("nsc_account.test", "public_key"),
+					testAccCheckAccountSeedFormat("nsc_account.test", "seed"),
 				),
 			},
 			// ImportState testing
 			{
-				ResourceName:      "natsjwt_account.test",
+				ResourceName:      "nsc_account.test",
 				ImportState:       true,
 				ImportStateVerify: true,
-				ImportStateIdFunc: testAccAccountImportStateIdFunc("natsjwt_account.test"),
+				ImportStateIdFunc: testAccAccountImportStateIdFunc("nsc_account.test"),
 				ImportStateVerifyIgnore: []string{
 					"jwt",           // JWT contains timestamps
 					"operator_seed", // Sensitive and not stored
@@ -48,7 +48,7 @@ func TestAccAccountResource_basic(t *testing.T) {
 			{
 				Config: testAccAccountResourceConfig("UpdatedAccount"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("natsjwt_account.test", "name", "UpdatedAccount"),
+					resource.TestCheckResourceAttr("nsc_account.test", "name", "UpdatedAccount"),
 				),
 			},
 		},
@@ -64,35 +64,35 @@ func TestAccAccountResource_withLimits(t *testing.T) {
 			{
 				Config: testAccAccountResourceConfigWithLimits(),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("natsjwt_account.test", "name", "LimitedAccount"),
+					resource.TestCheckResourceAttr("nsc_account.test", "name", "LimitedAccount"),
 					// Account limits
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_connections", "100"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_leaf_nodes", "10"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_data", "1073741824"), // 1GB
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_payload", "1048576"), // 1MB
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_subscriptions", "1000"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_imports", "50"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_exports", "50"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "allow_wildcard_exports", "false"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "disallow_bearer_token", "true"),
+					resource.TestCheckResourceAttr("nsc_account.test", "max_connections", "100"),
+					resource.TestCheckResourceAttr("nsc_account.test", "max_leaf_nodes", "10"),
+					resource.TestCheckResourceAttr("nsc_account.test", "max_data", "1073741824"), // 1GB
+					resource.TestCheckResourceAttr("nsc_account.test", "max_payload", "1048576"), // 1MB
+					resource.TestCheckResourceAttr("nsc_account.test", "max_subscriptions", "1000"),
+					resource.TestCheckResourceAttr("nsc_account.test", "max_imports", "50"),
+					resource.TestCheckResourceAttr("nsc_account.test", "max_exports", "50"),
+					resource.TestCheckResourceAttr("nsc_account.test", "allow_wildcard_exports", "false"),
+					resource.TestCheckResourceAttr("nsc_account.test", "disallow_bearer_token", "true"),
 					// JetStream limits
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_memory_storage", "536870912"), // 512MB
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_disk_storage", "10737418240"), // 10GB
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_streams", "10"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_consumers", "100"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_ack_pending", "1000"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_memory_stream_bytes", "134217728"), // 128MB
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_disk_stream_bytes", "1073741824"), // 1GB
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_bytes_required", "true"),
+					resource.TestCheckResourceAttr("nsc_account.test", "max_memory_storage", "536870912"), // 512MB
+					resource.TestCheckResourceAttr("nsc_account.test", "max_disk_storage", "10737418240"), // 10GB
+					resource.TestCheckResourceAttr("nsc_account.test", "max_streams", "10"),
+					resource.TestCheckResourceAttr("nsc_account.test", "max_consumers", "100"),
+					resource.TestCheckResourceAttr("nsc_account.test", "max_ack_pending", "1000"),
+					resource.TestCheckResourceAttr("nsc_account.test", "max_memory_stream_bytes", "134217728"), // 128MB
+					resource.TestCheckResourceAttr("nsc_account.test", "max_disk_stream_bytes", "1073741824"), // 1GB
+					resource.TestCheckResourceAttr("nsc_account.test", "max_bytes_required", "true"),
 				),
 			},
 			// Update limits
 			{
 				Config: testAccAccountResourceConfigWithUpdatedLimits(),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("natsjwt_account.test", "name", "LimitedAccount"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_connections", "200"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "max_streams", "20"),
+					resource.TestCheckResourceAttr("nsc_account.test", "name", "LimitedAccount"),
+					resource.TestCheckResourceAttr("nsc_account.test", "max_connections", "200"),
+					resource.TestCheckResourceAttr("nsc_account.test", "max_streams", "20"),
 				),
 			},
 		},
@@ -108,27 +108,27 @@ func TestAccAccountResource_withPermissions(t *testing.T) {
 			{
 				Config: testAccAccountResourceConfigWithPermissions(),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("natsjwt_account.test", "name", "TestAccount"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "allow_pub.#", "2"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "allow_pub.0", "app.>"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "allow_pub.1", "events.>"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "allow_sub.#", "2"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "allow_sub.0", "app.>"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "allow_sub.1", "metrics.>"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "deny_pub.#", "1"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "deny_pub.0", "admin.>"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "deny_sub.#", "1"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "deny_sub.0", "secrets.>"),
+					resource.TestCheckResourceAttr("nsc_account.test", "name", "TestAccount"),
+					resource.TestCheckResourceAttr("nsc_account.test", "allow_pub.#", "2"),
+					resource.TestCheckResourceAttr("nsc_account.test", "allow_pub.0", "app.>"),
+					resource.TestCheckResourceAttr("nsc_account.test", "allow_pub.1", "events.>"),
+					resource.TestCheckResourceAttr("nsc_account.test", "allow_sub.#", "2"),
+					resource.TestCheckResourceAttr("nsc_account.test", "allow_sub.0", "app.>"),
+					resource.TestCheckResourceAttr("nsc_account.test", "allow_sub.1", "metrics.>"),
+					resource.TestCheckResourceAttr("nsc_account.test", "deny_pub.#", "1"),
+					resource.TestCheckResourceAttr("nsc_account.test", "deny_pub.0", "admin.>"),
+					resource.TestCheckResourceAttr("nsc_account.test", "deny_sub.#", "1"),
+					resource.TestCheckResourceAttr("nsc_account.test", "deny_sub.0", "secrets.>"),
 				),
 			},
 			// Update permissions
 			{
 				Config: testAccAccountResourceConfigWithUpdatedPermissions(),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("natsjwt_account.test", "allow_pub.#", "1"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "allow_pub.0", "public.>"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "allow_sub.#", "1"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "allow_sub.0", "public.>"),
+					resource.TestCheckResourceAttr("nsc_account.test", "allow_pub.#", "1"),
+					resource.TestCheckResourceAttr("nsc_account.test", "allow_pub.0", "public.>"),
+					resource.TestCheckResourceAttr("nsc_account.test", "allow_sub.#", "1"),
+					resource.TestCheckResourceAttr("nsc_account.test", "allow_sub.0", "public.>"),
 				),
 			},
 		},
@@ -144,9 +144,9 @@ func TestAccAccountResource_withResponsePermissions(t *testing.T) {
 			{
 				Config: testAccAccountResourceConfigWithResponsePermissions(),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("natsjwt_account.test", "name", "TestAccount"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "allow_pub_response", "5"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "response_ttl", "10s"),
+					resource.TestCheckResourceAttr("nsc_account.test", "name", "TestAccount"),
+					resource.TestCheckResourceAttr("nsc_account.test", "allow_pub_response", "5"),
+					resource.TestCheckResourceAttr("nsc_account.test", "response_ttl", "10s"),
 				),
 			},
 		},
@@ -162,8 +162,8 @@ func TestAccAccountResource_withExpiry(t *testing.T) {
 			{
 				Config: testAccAccountResourceConfigWithExpiry("720h", "24h"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("natsjwt_account.test", "expiry", "720h"),
-					resource.TestCheckResourceAttr("natsjwt_account.test", "start", "24h"),
+					resource.TestCheckResourceAttr("nsc_account.test", "expiry", "720h"),
+					resource.TestCheckResourceAttr("nsc_account.test", "start", "24h"),
 				),
 			},
 		},
@@ -172,26 +172,26 @@ func TestAccAccountResource_withExpiry(t *testing.T) {
 
 func testAccAccountResourceConfig(name string) string {
 	return fmt.Sprintf(`
-resource "natsjwt_operator" "test" {
+resource "nsc_operator" "test" {
   name = "TestOperator"
 }
 
-resource "natsjwt_account" "test" {
+resource "nsc_account" "test" {
   name          = %[1]q
-  operator_seed = natsjwt_operator.test.seed
+  operator_seed = nsc_operator.test.seed
 }
 `, name)
 }
 
 func testAccAccountResourceConfigWithPermissions() string {
 	return `
-resource "natsjwt_operator" "test" {
+resource "nsc_operator" "test" {
   name = "TestOperator"
 }
 
-resource "natsjwt_account" "test" {
+resource "nsc_account" "test" {
   name          = "TestAccount"
-  operator_seed = natsjwt_operator.test.seed
+  operator_seed = nsc_operator.test.seed
 
   allow_pub = ["app.>", "events.>"]
   allow_sub = ["app.>", "metrics.>"]
@@ -203,13 +203,13 @@ resource "natsjwt_account" "test" {
 
 func testAccAccountResourceConfigWithUpdatedPermissions() string {
 	return `
-resource "natsjwt_operator" "test" {
+resource "nsc_operator" "test" {
   name = "TestOperator"
 }
 
-resource "natsjwt_account" "test" {
+resource "nsc_account" "test" {
   name          = "TestAccount"
-  operator_seed = natsjwt_operator.test.seed
+  operator_seed = nsc_operator.test.seed
 
   allow_pub = ["public.>"]
   allow_sub = ["public.>"]
@@ -219,13 +219,13 @@ resource "natsjwt_account" "test" {
 
 func testAccAccountResourceConfigWithResponsePermissions() string {
 	return `
-resource "natsjwt_operator" "test" {
+resource "nsc_operator" "test" {
   name = "TestOperator"
 }
 
-resource "natsjwt_account" "test" {
+resource "nsc_account" "test" {
   name               = "TestAccount"
-  operator_seed      = natsjwt_operator.test.seed
+  operator_seed      = nsc_operator.test.seed
   allow_pub_response = 5
   response_ttl       = "10s"
 }
@@ -234,13 +234,13 @@ resource "natsjwt_account" "test" {
 
 func testAccAccountResourceConfigWithExpiry(expiry, start string) string {
 	return fmt.Sprintf(`
-resource "natsjwt_operator" "test" {
+resource "nsc_operator" "test" {
   name = "TestOperator"
 }
 
-resource "natsjwt_account" "test" {
+resource "nsc_account" "test" {
   name          = "TestAccount"
-  operator_seed = natsjwt_operator.test.seed
+  operator_seed = nsc_operator.test.seed
   expiry        = %[1]q
   start         = %[2]q
 }
@@ -306,14 +306,14 @@ func testAccCheckAccountSeedFormat(resourceName, attrName string) resource.TestC
 
 func testAccAccountResourceConfigWithLimits() string {
 	return `
-resource "natsjwt_operator" "test" {
+resource "nsc_operator" "test" {
   name                 = "TestOperator"
   generate_signing_key = true
 }
 
-resource "natsjwt_account" "test" {
+resource "nsc_account" "test" {
   name          = "LimitedAccount"
-  operator_seed = natsjwt_operator.test.seed
+  operator_seed = nsc_operator.test.seed
 
   # Account limits
   max_connections    = 100
@@ -341,14 +341,14 @@ resource "natsjwt_account" "test" {
 
 func testAccAccountResourceConfigWithUpdatedLimits() string {
 	return `
-resource "natsjwt_operator" "test" {
+resource "nsc_operator" "test" {
   name                 = "TestOperator"
   generate_signing_key = true
 }
 
-resource "natsjwt_account" "test" {
+resource "nsc_account" "test" {
   name          = "LimitedAccount"
-  operator_seed = natsjwt_operator.test.seed
+  operator_seed = nsc_operator.test.seed
 
   # Updated account limits
   max_connections    = 200  # Changed

@@ -12,7 +12,7 @@ provider "natsjwt" {
 }
 
 # Create an operator - the root of the JWT hierarchy
-resource "natsjwt_operator" "main" {
+resource "nsc_operator" "main" {
   name = "MyOperator"
 
   # Optional: generate a signing key with the operator
@@ -24,9 +24,9 @@ resource "natsjwt_operator" "main" {
 }
 
 # Create an account under the operator
-resource "natsjwt_account" "app" {
+resource "nsc_account" "app" {
   name          = "ApplicationAccount"
-  operator_seed = natsjwt_operator.main.seed
+  operator_seed = nsc_operator.main.seed
 
   # Default permissions for all users in this account
   allow_pub = ["app.>"]
@@ -44,9 +44,9 @@ resource "natsjwt_account" "app" {
 }
 
 # Create a user under the account
-resource "natsjwt_user" "service" {
+resource "nsc_user" "service" {
   name         = "backend-service"
-  account_seed = natsjwt_account.app.seed
+  account_seed = nsc_account.app.seed
 
   # User-specific permissions (overrides account defaults)
   allow_pub = ["app.events.>", "app.requests.>"]
@@ -74,40 +74,40 @@ resource "natsjwt_user" "service" {
 
 # Output the generated JWTs and keys
 output "operator_jwt" {
-  value     = natsjwt_operator.main.jwt
+  value     = nsc_operator.main.jwt
   sensitive = true
 }
 
 output "operator_public_key" {
-  value = natsjwt_operator.main.public_key
+  value = nsc_operator.main.public_key
 }
 
 output "operator_signing_key" {
-  value     = natsjwt_operator.main.signing_key
+  value     = nsc_operator.main.signing_key
   sensitive = true
 }
 
 output "account_jwt" {
-  value     = natsjwt_account.app.jwt
+  value     = nsc_account.app.jwt
   sensitive = true
 }
 
 output "account_public_key" {
-  value = natsjwt_account.app.public_key
+  value = nsc_account.app.public_key
 }
 
 output "user_jwt" {
-  value     = natsjwt_user.service.jwt
+  value     = nsc_user.service.jwt
   sensitive = true
 }
 
 output "user_seed" {
-  value     = natsjwt_user.service.seed
+  value     = nsc_user.service.seed
   sensitive = true
 }
 
 output "user_creds" {
-  value       = natsjwt_user.service.creds
+  value       = nsc_user.service.creds
   sensitive   = true
   description = "Credentials string containing JWT and seed for NATS client connection"
 }

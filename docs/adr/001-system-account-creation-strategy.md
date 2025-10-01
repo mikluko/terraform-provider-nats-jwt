@@ -33,14 +33,14 @@ This creates both the operator and a system account named "SYS" in a single oper
 
 ## Decision
 
-We will require **explicit creation** of the system account as a separate `natsjwt_account` resource
+We will require **explicit creation** of the system account as a separate `nsc_account` resource
 with an `is_system` flag.
 
 ```hcl
 # Explicit system account creation
-resource "natsjwt_account" "system" {
+resource "nsc_account" "system" {
   name          = "SYS"
-  operator_seed = natsjwt_operator.main.seed
+  operator_seed = nsc_operator.main.seed
   is_system     = true
 }
 ```
@@ -79,7 +79,7 @@ Account management, including system accounts, belongs in account resources.
 
 Explicit resources simplify Terraform operations:
 
-- Clean import: `terraform import natsjwt_account.system "SYS/SA.../SO..."`
+- Clean import: `terraform import nsc_account.system "SYS/SA.../SO..."`
 - Clear state representation
 - Predictable destroy behavior
 - No hidden dependencies
@@ -90,7 +90,7 @@ We considered creating the system account automatically with the operator:
 
 ```hcl
 # Alternative: Implicit approach (rejected)
-resource "natsjwt_operator" "main" {
+resource "nsc_operator" "main" {
   name               = "MyOperator"
   create_sys_account = true  # Would create system account implicitly
 }

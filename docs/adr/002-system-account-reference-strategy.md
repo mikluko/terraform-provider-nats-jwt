@@ -27,22 +27,22 @@ be set after account creation:
 
 ```hcl
 # Step 1: Create operator
-resource "natsjwt_operator" "main" {
+resource "nsc_operator" "main" {
   name = "MyOperator"
   # system_account is optional, can be set later
 }
 
 # Step 2: Create system account
-resource "natsjwt_account" "system" {
+resource "nsc_account" "system" {
   name          = "SYS"
-  operator_seed = natsjwt_operator.main.seed
+  operator_seed = nsc_operator.main.seed
   is_system     = true
 }
 
 # Step 3: Update operator with system account reference
-resource "natsjwt_operator" "main" {
+resource "nsc_operator" "main" {
   name           = "MyOperator"
-  system_account = natsjwt_account.system.public_key
+  system_account = nsc_account.system.public_key
 }
 ```
 
@@ -120,21 +120,21 @@ claims.
 ### Complete Configuration
 
 ```hcl
-resource "natsjwt_operator" "main" {
+resource "nsc_operator" "main" {
   name                 = "production"
-  system_account       = natsjwt_account.system.public_key
+  system_account       = nsc_account.system.public_key
   generate_signing_key = true
 }
 
-resource "natsjwt_account" "system" {
+resource "nsc_account" "system" {
   name          = "SYS"
-  operator_seed = natsjwt_operator.main.seed
+  operator_seed = nsc_operator.main.seed
   is_system     = true
 }
 
-resource "natsjwt_account" "app" {
+resource "nsc_account" "app" {
   name          = "application"
-  operator_seed = natsjwt_operator.main.seed
+  operator_seed = nsc_operator.main.seed
 
   allow_pub = [ "app.>" ]
   allow_sub = [ "app.>", "_INBOX.>" ]
@@ -147,15 +147,15 @@ For existing operators without system accounts:
 
 ```hcl
 # Add system account to existing operator
-resource "natsjwt_account" "system" {
+resource "nsc_account" "system" {
   name          = "SYS"
-  operator_seed = data.natsjwt_operator.existing.seed
+  operator_seed = data.nsc_operator.existing.seed
   is_system     = true
 }
 
 # Update operator configuration
-resource "natsjwt_operator" "existing" {
+resource "nsc_operator" "existing" {
   # ... existing config ...
-  system_account = natsjwt_account.system.public_key
+  system_account = nsc_account.system.public_key
 }
 ```

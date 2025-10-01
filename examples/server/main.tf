@@ -25,7 +25,7 @@ provider "docker" {
 }
 
 # Create the operator with integrated system account
-resource "natsjwt_operator" "main" {
+resource "nsc_operator" "main" {
   name                  = "MyOperator"
   generate_signing_key  = true
   create_system_account = true  # Creates system account automatically
@@ -33,9 +33,9 @@ resource "natsjwt_operator" "main" {
 }
 
 # Create application account
-resource "natsjwt_account" "application" {
+resource "nsc_account" "application" {
   name          = "Application"
-  operator_seed = natsjwt_operator.main.seed
+  operator_seed = nsc_operator.main.seed
 
   # Default permissions for users in this account
   allow_pub = ["app.>", "_INBOX.>"]
@@ -61,9 +61,9 @@ resource "natsjwt_account" "application" {
 }
 
 # Create system account admin user
-resource "natsjwt_user" "sys_admin" {
+resource "nsc_user" "sys_admin" {
   name         = "sys_admin"
-  account_seed = natsjwt_operator.main.system_account_seed # Use system account seed from operator
+  account_seed = nsc_operator.main.system_account_seed # Use system account seed from operator
 
   # Full access to everything
   allow_pub = [">"]
@@ -71,9 +71,9 @@ resource "natsjwt_user" "sys_admin" {
 }
 
 # Create application user with limited permissions
-resource "natsjwt_user" "app_user" {
+resource "nsc_user" "app_user" {
   name         = "app_user"
-  account_seed = natsjwt_account.application.seed
+  account_seed = nsc_account.application.seed
 
   # Limited permissions - can't access admin topics
   allow_pub = ["app.data.>", "_INBOX.>"]
@@ -91,9 +91,9 @@ resource "natsjwt_user" "app_user" {
 }
 
 # Create application admin user
-resource "natsjwt_user" "app_admin" {
+resource "nsc_user" "app_admin" {
   name         = "app_admin"
-  account_seed = natsjwt_account.application.seed
+  account_seed = nsc_account.application.seed
 
   # Full access within the application account
   allow_pub          = [">"]
@@ -111,16 +111,16 @@ locals {
     port: 4222
 
     # JWT-based operator mode
-    operator: ${natsjwt_operator.main.jwt}
+    operator: ${nsc_operator.main.jwt}
 
     # System account (created with operator)
-    system_account: ${natsjwt_operator.main.system_account}
+    system_account: ${nsc_operator.main.system_account}
 
     # Resolver for JWT/Accounts
     resolver: MEMORY
     resolver_preload: {
-      ${natsjwt_operator.main.system_account}: ${natsjwt_operator.main.system_account_jwt}
-      ${natsjwt_account.application.public_key}: ${natsjwt_account.application.jwt}
+      ${nsc_operator.main.system_account}: ${nsc_operator.main.system_account_jwt}
+      ${nsc_account.application.public_key}: ${nsc_account.application.jwt}
     }
 
     # Logging
@@ -160,21 +160,21 @@ resource "local_file" "nats_config" {
 # Write user credentials files
 resource "local_file" "app_user_creds" {
   filename = "${path.module}/creds/app_user.creds"
-  content  = natsjwt_user.app_user.creds
+  content  = nsc_user.app_user.creds
 
   file_permission = "0600"
 }
 
 resource "local_file" "app_admin_creds" {
   filename = "${path.module}/creds/app_admin.creds"
-  content  = natsjwt_user.app_admin.creds
+  content  = nsc_user.app_admin.creds
 
   file_permission = "0600"
 }
 
 resource "local_file" "sys_admin_creds" {
   filename = "${path.module}/creds/sys_admin.creds"
-  content  = natsjwt_user.sys_admin.creds
+  content  = nsc_user.sys_admin.creds
 
   file_permission = "0600"
 }

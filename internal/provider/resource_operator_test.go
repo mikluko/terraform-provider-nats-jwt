@@ -19,25 +19,25 @@ func TestAccOperatorResource_basic(t *testing.T) {
 			{
 				Config: testAccOperatorResourceConfig("TestOperator"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("natsjwt_operator.test", "name", "TestOperator"),
-					resource.TestCheckResourceAttr("natsjwt_operator.test", "generate_signing_key", "false"),
-					resource.TestCheckResourceAttr("natsjwt_operator.test", "expiry", "0s"),
-					resource.TestCheckResourceAttr("natsjwt_operator.test", "start", "0s"),
-					resource.TestCheckResourceAttrSet("natsjwt_operator.test", "jwt"),
-					resource.TestCheckResourceAttrSet("natsjwt_operator.test", "seed"),
-					resource.TestCheckResourceAttrSet("natsjwt_operator.test", "public_key"),
-					resource.TestCheckNoResourceAttr("natsjwt_operator.test", "signing_key"),
-					resource.TestCheckNoResourceAttr("natsjwt_operator.test", "signing_key_seed"),
-					testAccCheckOperatorPublicKeyFormat("natsjwt_operator.test", "public_key"),
-					testAccCheckOperatorSeedFormat("natsjwt_operator.test", "seed"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "name", "TestOperator"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "generate_signing_key", "false"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "expiry", "0s"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "start", "0s"),
+					resource.TestCheckResourceAttrSet("nsc_operator.test", "jwt"),
+					resource.TestCheckResourceAttrSet("nsc_operator.test", "seed"),
+					resource.TestCheckResourceAttrSet("nsc_operator.test", "public_key"),
+					resource.TestCheckNoResourceAttr("nsc_operator.test", "signing_key"),
+					resource.TestCheckNoResourceAttr("nsc_operator.test", "signing_key_seed"),
+					testAccCheckOperatorPublicKeyFormat("nsc_operator.test", "public_key"),
+					testAccCheckOperatorSeedFormat("nsc_operator.test", "seed"),
 				),
 			},
 			// ImportState testing
 			{
-				ResourceName:      "natsjwt_operator.test",
+				ResourceName:      "nsc_operator.test",
 				ImportState:       true,
 				ImportStateVerify: true,
-				ImportStateIdFunc: testAccOperatorImportStateIdFunc("natsjwt_operator.test"),
+				ImportStateIdFunc: testAccOperatorImportStateIdFunc("nsc_operator.test"),
 				ImportStateVerifyIgnore: []string{
 					"jwt",    // JWT contains timestamps
 					"expiry", // Default value handling
@@ -49,7 +49,7 @@ func TestAccOperatorResource_basic(t *testing.T) {
 			{
 				Config: testAccOperatorResourceConfig("UpdatedOperator"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("natsjwt_operator.test", "name", "UpdatedOperator"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "name", "UpdatedOperator"),
 				),
 			},
 		},
@@ -65,12 +65,12 @@ func TestAccOperatorResource_withSigningKey(t *testing.T) {
 			{
 				Config: testAccOperatorResourceConfigWithSigningKey("TestOperator"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("natsjwt_operator.test", "name", "TestOperator"),
-					resource.TestCheckResourceAttr("natsjwt_operator.test", "generate_signing_key", "true"),
-					resource.TestCheckResourceAttrSet("natsjwt_operator.test", "signing_key"),
-					resource.TestCheckResourceAttrSet("natsjwt_operator.test", "signing_key_seed"),
-					testAccCheckOperatorPublicKeyFormat("natsjwt_operator.test", "signing_key"),
-					testAccCheckOperatorSeedFormat("natsjwt_operator.test", "signing_key_seed"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "name", "TestOperator"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "generate_signing_key", "true"),
+					resource.TestCheckResourceAttrSet("nsc_operator.test", "signing_key"),
+					resource.TestCheckResourceAttrSet("nsc_operator.test", "signing_key_seed"),
+					testAccCheckOperatorPublicKeyFormat("nsc_operator.test", "signing_key"),
+					testAccCheckOperatorSeedFormat("nsc_operator.test", "signing_key_seed"),
 				),
 			},
 		},
@@ -86,17 +86,17 @@ func TestAccOperatorResource_withExpiry(t *testing.T) {
 			{
 				Config: testAccOperatorResourceConfigWithExpiry("TestOperator", "720h", "24h"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("natsjwt_operator.test", "name", "TestOperator"),
-					resource.TestCheckResourceAttr("natsjwt_operator.test", "expiry", "720h"),
-					resource.TestCheckResourceAttr("natsjwt_operator.test", "start", "24h"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "name", "TestOperator"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "expiry", "720h"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "start", "24h"),
 				),
 			},
 			// Update expiry
 			{
 				Config: testAccOperatorResourceConfigWithExpiry("TestOperator", "1440h", "48h"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("natsjwt_operator.test", "expiry", "1440h"),
-					resource.TestCheckResourceAttr("natsjwt_operator.test", "start", "48h"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "expiry", "1440h"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "start", "48h"),
 				),
 			},
 		},
@@ -105,7 +105,7 @@ func TestAccOperatorResource_withExpiry(t *testing.T) {
 
 func testAccOperatorResourceConfig(name string) string {
 	return fmt.Sprintf(`
-resource "natsjwt_operator" "test" {
+resource "nsc_operator" "test" {
   name = %[1]q
 }
 `, name)
@@ -113,7 +113,7 @@ resource "natsjwt_operator" "test" {
 
 func testAccOperatorResourceConfigWithSigningKey(name string) string {
 	return fmt.Sprintf(`
-resource "natsjwt_operator" "test" {
+resource "nsc_operator" "test" {
   name                 = %[1]q
   generate_signing_key = true
 }
@@ -122,7 +122,7 @@ resource "natsjwt_operator" "test" {
 
 func testAccOperatorResourceConfigWithExpiry(name, expiry, start string) string {
 	return fmt.Sprintf(`
-resource "natsjwt_operator" "test" {
+resource "nsc_operator" "test" {
   name   = %[1]q
   expiry = %[2]q
   start  = %[3]q

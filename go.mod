@@ -1,4 +1,4 @@
-module github.com/mikluko/terraform-provider-nats-jwt
+module github.com/mikluko/terraform-provider-nsc
 
 go 1.25
 

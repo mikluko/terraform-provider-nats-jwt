@@ -10,28 +10,28 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
 
-var _ provider.Provider = &NATSJWTProvider{}
-var _ provider.ProviderWithFunctions = &NATSJWTProvider{}
+var _ provider.Provider = &NSCProvider{}
+var _ provider.ProviderWithFunctions = &NSCProvider{}
 
-type NATSJWTProvider struct {
+type NSCProvider struct {
 	version string
 }
 
-type NATSJWTProviderModel struct{}
+type NSCProviderModel struct{}
 
-func (p *NATSJWTProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "natsjwt"
+func (p *NSCProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "nsc"
 	resp.Version = p.version
 }
 
-func (p *NATSJWTProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *NSCProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: `Provider for managing NATS JWT tokens. All keys and JWTs are stored in Terraform state.`,
 	}
 }
 
-func (p *NATSJWTProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	var data NATSJWTProviderModel
+func (p *NSCProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var data NSCProviderModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -39,7 +39,7 @@ func (p *NATSJWTProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 }
 
-func (p *NATSJWTProvider) Resources(ctx context.Context) []func() resource.Resource {
+func (p *NSCProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewOperatorResource,
 		NewAccountResource,
@@ -47,17 +47,17 @@ func (p *NATSJWTProvider) Resources(ctx context.Context) []func() resource.Resou
 	}
 }
 
-func (p *NATSJWTProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+func (p *NSCProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{}
 }
 
-func (p *NATSJWTProvider) Functions(ctx context.Context) []func() function.Function {
+func (p *NSCProvider) Functions(ctx context.Context) []func() function.Function {
 	return []func() function.Function{}
 }
 
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
-		return &NATSJWTProvider{
+		return &NSCProvider{
 			version: version,
 		}
 	}

@@ -26,7 +26,7 @@ This creates an impossible situation:
 `create_system_account` flag.
 
 ```hcl
-resource "natsjwt_operator" "main" {
+resource "nsc_operator" "main" {
   name = "MyOperator"
   generate_signing_key = true
 
@@ -36,9 +36,9 @@ resource "natsjwt_operator" "main" {
 }
 
 # Regular accounts still created separately
-resource "natsjwt_account" "app" {
+resource "nsc_account" "app" {
   name          = "AppAccount"
-  operator_seed = natsjwt_operator.main.seed
+  operator_seed = nsc_operator.main.seed
   # ...
 }
 ```
@@ -109,14 +109,14 @@ To address the negatives:
 
 1. Provide essential system account configuration options in operator resource
 2. Document that advanced system account features require separate management
-3. Consider a future `natsjwt_system_account` resource for advanced use cases
+3. Consider a future `nsc_system_account` resource for advanced use cases
 
 ## Implementation Details
 
 ### Operator Resource Attributes
 
 ```hcl
-resource "natsjwt_operator" "main" {
+resource "nsc_operator" "main" {
   # Existing attributes
   name                 = "MyOperator"
   generate_signing_key = true
@@ -136,20 +136,20 @@ resource "natsjwt_operator" "main" {
 
 ```hcl
 # Operator outputs
-output "operator_jwt" { value = natsjwt_operator.main.jwt }
-output "operator_seed" { value = natsjwt_operator.main.seed }
+output "operator_jwt" { value = nsc_operator.main.jwt }
+output "operator_seed" { value = nsc_operator.main.seed }
 
 # System account outputs (when created)
-output "system_jwt" { value = natsjwt_operator.main.system_account_jwt }
-output "system_seed" { value = natsjwt_operator.main.system_account_seed }
-output "system_public_key" { value = natsjwt_operator.main.system_account }
+output "system_jwt" { value = nsc_operator.main.system_account_jwt }
+output "system_seed" { value = nsc_operator.main.system_account_seed }
+output "system_public_key" { value = nsc_operator.main.system_account }
 ```
 
 ### Migration Strategy
 
 For users of the previous approach:
 
-1. Remove separate `natsjwt_account` resource for system account
+1. Remove separate `nsc_account` resource for system account
 2. Set `create_system_account = true` on operator
 3. Run `terraform apply` to migrate
 

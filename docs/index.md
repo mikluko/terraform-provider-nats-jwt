@@ -1,12 +1,12 @@
 ---
-page_title: "natsjwt Provider"
+page_title: "nsc Provider"
 description: |-
-  The NATS JWT provider manages JWT tokens for NATS authentication
+  The NSC provider manages NATS JWT tokens for authentication (named after the nsc CLI tool)
 ---
 
-# natsjwt Provider
+# nsc Provider
 
-The NATS JWT provider allows Terraform to manage JWT tokens for NATS authentication and authorization. It provides resources to create and manage operators, accounts, and users in a NATS JWT authentication hierarchy.
+The NSC provider (named after the [nsc CLI tool](https://docs.nats.io/using-nats/nats-tools/nsc)) allows Terraform to manage JWT tokens for NATS authentication and authorization. It provides resources to create and manage operators, accounts, and users in a NATS JWT authentication hierarchy.
 
 ## Use Cases
 
