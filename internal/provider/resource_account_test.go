@@ -406,12 +406,12 @@ func TestAccAccountResource_withExports(t *testing.T) {
 				Config: testAccAccountResourceConfigWithExports(),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("nsc_account.test", "name", "ExportAccount"),
-					resource.TestCheckResourceAttr("nsc_account.test", "exports.#", "2"),
-					resource.TestCheckResourceAttr("nsc_account.test", "exports.0.subject", "events.>"),
-					resource.TestCheckResourceAttr("nsc_account.test", "exports.0.type", "stream"),
-					resource.TestCheckResourceAttr("nsc_account.test", "exports.1.subject", "api.requests"),
-					resource.TestCheckResourceAttr("nsc_account.test", "exports.1.type", "service"),
-					resource.TestCheckResourceAttr("nsc_account.test", "exports.1.response_type", "Singleton"),
+					resource.TestCheckResourceAttr("nsc_account.test", "export.#", "2"),
+					resource.TestCheckResourceAttr("nsc_account.test", "export.0.subject", "events.>"),
+					resource.TestCheckResourceAttr("nsc_account.test", "export.0.type", "stream"),
+					resource.TestCheckResourceAttr("nsc_account.test", "export.1.subject", "api.requests"),
+					resource.TestCheckResourceAttr("nsc_account.test", "export.1.type", "service"),
+					resource.TestCheckResourceAttr("nsc_account.test", "export.1.response_type", "Singleton"),
 				),
 			},
 		},
@@ -428,10 +428,10 @@ func TestAccAccountResource_withImports(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("nsc_account.provider", "name", "ProviderAccount"),
 					resource.TestCheckResourceAttr("nsc_account.consumer", "name", "ConsumerAccount"),
-					resource.TestCheckResourceAttr("nsc_account.consumer", "imports.#", "1"),
-					resource.TestCheckResourceAttr("nsc_account.consumer", "imports.0.subject", "shared.events.>"),
-					resource.TestCheckResourceAttr("nsc_account.consumer", "imports.0.type", "stream"),
-					resource.TestCheckResourceAttr("nsc_account.consumer", "imports.0.local_subject", "events.>"),
+					resource.TestCheckResourceAttr("nsc_account.consumer", "import.#", "1"),
+					resource.TestCheckResourceAttr("nsc_account.consumer", "import.0.subject", "shared.events.>"),
+					resource.TestCheckResourceAttr("nsc_account.consumer", "import.0.type", "stream"),
+					resource.TestCheckResourceAttr("nsc_account.consumer", "import.0.local_subject", "events.>"),
 				),
 			},
 		},
@@ -447,14 +447,14 @@ resource "nsc_account" "test" {
   name          = "ExportAccount"
   operator_seed = %[1]q
 
-  exports {
+  export {
     subject = "events.>"
     type    = "stream"
     description = "Event stream export"
     advertise = true
   }
 
-  exports {
+  export {
     subject = "api.requests"
     type    = "service"
     response_type = "Singleton"
@@ -483,7 +483,7 @@ resource "nsc_account" "consumer" {
   name          = "ConsumerAccount"
   operator_seed = %[1]q
 
-  imports {
+  import {
     subject = "shared.events.>"
     account = %[2]q
     type    = "stream"

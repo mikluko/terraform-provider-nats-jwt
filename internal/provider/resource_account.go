@@ -88,8 +88,8 @@ type AccountResourceModel struct {
 	MaxBytesRequired     types.Bool  `tfsdk:"max_bytes_required"`
 
 	// Imports/Exports
-	Exports types.List `tfsdk:"exports"`
-	Imports types.List `tfsdk:"imports"`
+	Exports types.List `tfsdk:"export"`
+	Imports types.List `tfsdk:"import"`
 
 	JWT       types.String `tfsdk:"jwt"`
 	Seed      types.String `tfsdk:"seed"`
@@ -257,8 +257,8 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 			},
 		},
 		Blocks: map[string]schema.Block{
-			"exports": schema.ListNestedBlock{
-				MarkdownDescription: "List of exports this account provides to other accounts",
+			"export": schema.ListNestedBlock{
+				MarkdownDescription: "Exports this account provides to other accounts",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -305,8 +305,8 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 					},
 				},
 			},
-			"imports": schema.ListNestedBlock{
-				MarkdownDescription: "List of imports from other accounts",
+			"import": schema.ListNestedBlock{
+				MarkdownDescription: "Imports from other accounts",
 				NestedObject: schema.NestedBlockObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
