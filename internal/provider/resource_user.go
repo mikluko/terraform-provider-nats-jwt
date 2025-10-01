@@ -33,7 +33,8 @@ type UserResource struct{}
 type UserResourceModel struct {
 	ID               types.String         `tfsdk:"id"`
 	Name             types.String         `tfsdk:"name"`
-	AccountSeed      types.String         `tfsdk:"account_seed"`
+	Subject          types.String         `tfsdk:"subject"`
+	IssuerSeed       types.String         `tfsdk:"issuer_seed"`
 	AllowPub         types.List           `tfsdk:"allow_pub"`
 	AllowSub         types.List           `tfsdk:"allow_sub"`
 	DenyPub          types.List           `tfsdk:"deny_pub"`
@@ -53,9 +54,7 @@ type UserResourceModel struct {
 	Expiry    timetypes.GoDuration `tfsdk:"expiry"`
 	Start     timetypes.GoDuration `tfsdk:"start"`
 	JWT       types.String         `tfsdk:"jwt"`
-	Seed      types.String         `tfsdk:"seed"`
 	PublicKey types.String         `tfsdk:"public_key"`
-	Creds     types.String         `tfsdk:"creds"`
 }
 
 func (r *UserResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -78,10 +77,17 @@ func (r *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Required:            true,
 				MarkdownDescription: "User name",
 			},
-			"account_seed": schema.StringAttribute{
+			"subject": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "User public key (subject of the JWT)",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"issuer_seed": schema.StringAttribute{
 				Required:            true,
 				Sensitive:           true,
-				MarkdownDescription: "Account seed for signing the user JWT",
+				MarkdownDescription: "Account seed for signing the user JWT (issuer)",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -151,19 +157,9 @@ func (r *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Computed:            true,
 				MarkdownDescription: "Generated JWT token",
 			},
-			"seed": schema.StringAttribute{
-				Computed:            true,
-				Sensitive:           true,
-				MarkdownDescription: "User seed (private key)",
-			},
 			"public_key": schema.StringAttribute{
 				Computed:            true,
-				MarkdownDescription: "User public key",
-			},
-			"creds": schema.StringAttribute{
-				Computed:            true,
-				Sensitive:           true,
-				MarkdownDescription: "Credentials string containing JWT and seed for NATS client connection",
+				MarkdownDescription: "User public key (same as subject)",
 			},
 
 			// User Limits
@@ -200,59 +196,49 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	// Generate user key pair
-	userKP, err := nkeys.CreateUser()
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to create user keypair", err.Error())
+	// Get user public key (subject)
+	userPubKey := data.Subject.ValueString()
+	if !strings.HasPrefix(userPubKey, "U") {
+		resp.Diagnostics.AddError(
+			"Invalid user public key",
+			fmt.Sprintf("User public key must start with 'U', got: %s", userPubKey[:1]),
+		)
 		return
 	}
 
-	userPubKey, err := userKP.PublicKey()
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to get user public key", err.Error())
-		return
-	}
-
-	userSeed, err := userKP.Seed()
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to get user seed", err.Error())
-		return
-	}
-
-	// Create user claims
-	userClaims := jwt.NewUserClaims(userPubKey)
-	userClaims.Name = data.Name.ValueString()
-
-	// Get account public key from seed
-	accountSeedStr := data.AccountSeed.ValueString()
+	// Get account seed (issuer) for signing
+	accountSeedStr := data.IssuerSeed.ValueString()
 	if !strings.HasPrefix(accountSeedStr, "SA") {
 		resp.Diagnostics.AddError(
-			"Invalid account seed",
-			fmt.Sprintf("Account seed must start with 'SA', got: %s...", accountSeedStr[:2]),
+			"Invalid issuer seed",
+			fmt.Sprintf("Account seed must start with 'SA', got: %s", accountSeedStr[:2]),
 		)
 		return
 	}
 
 	accountKP, err := nkeys.FromSeed([]byte(accountSeedStr))
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to restore account keypair", err.Error())
+		resp.Diagnostics.AddError("Failed to parse issuer seed", err.Error())
 		return
 	}
 
+	// Verify the seed produces an account key
 	accountPubKey, err := accountKP.PublicKey()
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to get account public key", err.Error())
+		resp.Diagnostics.AddError("Failed to get public key from issuer seed", err.Error())
 		return
 	}
-
-	// Validate it's actually an account key
 	if !strings.HasPrefix(accountPubKey, "A") {
 		resp.Diagnostics.AddError(
-			"Invalid account seed",
-			fmt.Sprintf("Seed does not generate an account public key (expected A*, got %s)", accountPubKey),
+			"Invalid issuer seed",
+			fmt.Sprintf("Issuer seed does not generate an account public key (expected A*, got %s)", accountPubKey),
 		)
 		return
 	}
+
+	// Create user claims
+	userClaims := jwt.NewUserClaims(userPubKey)
+	userClaims.Name = data.Name.ValueString()
 	userClaims.IssuerAccount = accountPubKey
 
 	// Handle permissions
@@ -386,15 +372,10 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	// Create creds file content
-	creds := fmt.Sprintf("-----BEGIN NATS USER JWT-----\n%s\n------END NATS USER JWT------\n\n-----BEGIN USER NKEY SEED-----\n%s\n------END USER NKEY SEED------\n", userJWT, string(userSeed))
-
 	// Set computed values
 	data.ID = types.StringValue(userPubKey)
 	data.PublicKey = types.StringValue(userPubKey)
-	data.Seed = types.StringValue(string(userSeed))
 	data.JWT = types.StringValue(userJWT)
-	data.Creds = types.StringValue(creds)
 
 	tflog.Trace(ctx, "created user resource")
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -419,26 +400,16 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	// Get current state to preserve keys
+	// Get current state to preserve immutable fields
 	var state UserResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Recreate user claims with updated values
-	userClaims := jwt.NewUserClaims(state.PublicKey.ValueString())
-	userClaims.Name = data.Name.ValueString()
-
-	// Get account public key from seed
-	accountSeedStr := data.AccountSeed.ValueString()
-	if !strings.HasPrefix(accountSeedStr, "SA") {
-		resp.Diagnostics.AddError(
-			"Invalid account seed",
-			fmt.Sprintf("Account seed must start with 'SA', got: %s...", accountSeedStr[:2]),
-		)
-		return
-	}
+	// Get user public key and account seed from state (immutable)
+	userPubKey := state.Subject.ValueString()
+	accountSeedStr := state.IssuerSeed.ValueString()
 
 	accountKP, err := nkeys.FromSeed([]byte(accountSeedStr))
 	if err != nil {
@@ -446,20 +417,16 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
+	// Get account public key
 	accountPubKey, err := accountKP.PublicKey()
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get account public key", err.Error())
 		return
 	}
 
-	// Validate it's actually an account key
-	if !strings.HasPrefix(accountPubKey, "A") {
-		resp.Diagnostics.AddError(
-			"Invalid account seed",
-			fmt.Sprintf("Seed does not generate an account public key (expected A*, got %s)", accountPubKey),
-		)
-		return
-	}
+	// Create user claims with updated values
+	userClaims := jwt.NewUserClaims(userPubKey)
+	userClaims.Name = data.Name.ValueString()
 	userClaims.IssuerAccount = accountPubKey
 
 	// Handle permissions (same as create)
@@ -593,15 +560,12 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	// Create creds file content
-	creds := fmt.Sprintf("-----BEGIN NATS USER JWT-----\n%s\n------END NATS USER JWT------\n\n-----BEGIN USER NKEY SEED-----\n%s\n------END USER NKEY SEED------\n", userJWT, strings.TrimSpace(state.Seed.ValueString()))
-
-	// Update JWT and creds while preserving keys
+	// Update JWT while preserving immutable fields
 	data.ID = state.ID
 	data.PublicKey = state.PublicKey
-	data.Seed = state.Seed
+	data.Subject = state.Subject
+	data.IssuerSeed = state.IssuerSeed
 	data.JWT = types.StringValue(userJWT)
-	data.Creds = types.StringValue(creds)
 
 	tflog.Trace(ctx, "updated user resource")
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -620,164 +584,93 @@ func (r *UserResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 }
 
 func (r *UserResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Import formats:
-	// - seed (just the user seed)
-	// - name/seed
-	// - name/seed/account_seed
+	// Import format: name/subject/issuer_seed
 	// Name can contain / encoded as // or %2F
 
 	parts := strings.Split(req.ID, "/")
 
-	var name string
-	var userSeed string
-	var accountSeed string
-
-	// Parse from the end - seeds have predictable format
-	// Check if last part is account seed (SA) or user seed (SU)
-	// Format can be:
-	//   - seed (just user seed)
-	//   - name/seed (name and user seed)
-	//   - name/seed/account_seed (all three)
-
-	if len(parts) == 0 {
+	if len(parts) < 2 {
 		resp.Diagnostics.AddError(
 			"Invalid import ID",
-			"Import ID must be: seed, name/seed, or name/seed/account_seed",
+			"Import ID must be: name/subject/issuer_seed",
 		)
 		return
 	}
 
-	lastPart := parts[len(parts)-1]
-
-	// Check if the last part is an account seed (for the 3-part format)
-	if strings.HasPrefix(lastPart, "SA") && len(parts) >= 2 {
-		// Format: name/user_seed/account_seed
-		accountSeed = lastPart
-		userSeed = parts[len(parts)-2]
-
-		// Validate user seed
-		if !strings.HasPrefix(userSeed, "SU") {
-			resp.Diagnostics.AddError(
-				"Invalid user seed",
-				fmt.Sprintf("Expected user seed starting with 'SU', got: %s", userSeed),
-			)
-			return
-		}
-
-		// Name is everything before the seeds
-		if len(parts) > 2 {
-			nameParts := parts[:len(parts)-2]
-			name = strings.Join(nameParts, "/")
-		}
-	} else if strings.HasPrefix(lastPart, "SU") {
-		// Format: seed or name/seed (no account seed)
-		userSeed = lastPart
-
-		// Check if we have a name
-		if len(parts) > 1 {
-			nameParts := parts[:len(parts)-1]
-			name = strings.Join(nameParts, "/")
-		}
-	} else {
+	// Last part is the issuer seed (account seed)
+	issuerSeed := parts[len(parts)-1]
+	if !strings.HasPrefix(issuerSeed, "SA") {
 		resp.Diagnostics.AddError(
-			"Invalid seed format",
-			fmt.Sprintf("Expected user seed (SU*) or account seed (SA*), got: %s", lastPart),
+			"Invalid issuer seed",
+			fmt.Sprintf("Expected account seed starting with 'SA', got: %s", issuerSeed),
 		)
 		return
 	}
+
+	// Second to last part is the subject (user public key)
+	subject := parts[len(parts)-2]
+	if !strings.HasPrefix(subject, "U") {
+		resp.Diagnostics.AddError(
+			"Invalid subject",
+			fmt.Sprintf("Expected user public key starting with 'U', got: %s", subject),
+		)
+		return
+	}
+
+	// Everything before is the name
+	nameParts := parts[:len(parts)-2]
+	name := strings.Join(nameParts, "/")
 
 	// Decode name (handle // and %2F encodings)
-	if name != "" {
-		name = strings.ReplaceAll(name, "//", "\x00") // Temporary placeholder
-		name = strings.ReplaceAll(name, "%2F", "/")
-		name = strings.ReplaceAll(name, "\x00", "/") // Replace placeholder with /
-	} else {
-		name = "imported-user"
-	}
+	name = strings.ReplaceAll(name, "//", "\x00") // Temporary placeholder
+	name = strings.ReplaceAll(name, "%2F", "/")
+	name = strings.ReplaceAll(name, "\x00", "/") // Replace placeholder with /
 
-	// Validate the user seed
-	kp, err := nkeys.FromSeed([]byte(userSeed))
+	// Validate the issuer seed
+	accKP, err := nkeys.FromSeed([]byte(issuerSeed))
 	if err != nil {
-		resp.Diagnostics.AddError("Invalid user seed", fmt.Sprintf("Failed to parse seed: %v", err))
+		resp.Diagnostics.AddError("Invalid issuer seed", fmt.Sprintf("Failed to parse seed: %v", err))
 		return
 	}
 
-	publicKey, err := kp.PublicKey()
+	accPubKey, err := accKP.PublicKey()
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid keypair", fmt.Sprintf("Failed to get public key: %v", err))
 		return
 	}
 
-	// Validate it's a user key
-	if !strings.HasPrefix(publicKey, "U") {
+	// Validate it's an account key
+	if !strings.HasPrefix(accPubKey, "A") {
 		resp.Diagnostics.AddError(
 			"Invalid key type",
-			fmt.Sprintf("Seed does not generate a user public key (expected U*, got %s)", publicKey),
+			fmt.Sprintf("Issuer seed does not generate an account public key (expected A*, got %s)", accPubKey),
 		)
 		return
 	}
 
-	// If no account seed provided, we can't sign JWTs, but we can still import
-	if accountSeed == "" {
-		resp.Diagnostics.AddWarning(
-			"No account seed provided",
-			"User imported without account seed. You'll need to provide account_seed to regenerate JWTs.",
-		)
-	} else {
-		// Validate account seed
-		accKP, err := nkeys.FromSeed([]byte(accountSeed))
-		if err != nil {
-			resp.Diagnostics.AddError("Invalid account seed", fmt.Sprintf("Failed to parse account seed: %v", err))
-			return
-		}
-		accPubKey, err := accKP.PublicKey()
-		if err == nil && !strings.HasPrefix(accPubKey, "A") {
-			resp.Diagnostics.AddError(
-				"Invalid account seed",
-				fmt.Sprintf("Account seed does not generate an account public key (expected A*, got %s)", accPubKey),
-			)
-			return
-		}
+	// Generate a fresh JWT
+	claims := jwt.NewUserClaims(subject)
+	claims.Name = name
+	claims.IssuerAccount = accPubKey
+
+	// Encode JWT
+	userJWT, err := claims.Encode(accKP)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to generate JWT", fmt.Sprintf("Failed to encode user JWT: %v", err))
+		return
 	}
 
 	// Set state attributes
-	resp.State.SetAttribute(ctx, path.Root("id"), types.StringValue(publicKey))
-	resp.State.SetAttribute(ctx, path.Root("public_key"), types.StringValue(publicKey))
-	resp.State.SetAttribute(ctx, path.Root("seed"), types.StringValue(userSeed))
+	resp.State.SetAttribute(ctx, path.Root("id"), types.StringValue(subject))
 	resp.State.SetAttribute(ctx, path.Root("name"), types.StringValue(name))
+	resp.State.SetAttribute(ctx, path.Root("subject"), types.StringValue(subject))
+	resp.State.SetAttribute(ctx, path.Root("issuer_seed"), types.StringValue(issuerSeed))
 	resp.State.SetAttribute(ctx, path.Root("expiry"), timetypes.NewGoDurationValue(0))
 	resp.State.SetAttribute(ctx, path.Root("start"), timetypes.NewGoDurationValue(0))
 	resp.State.SetAttribute(ctx, path.Root("allow_pub_response"), types.Int64Value(0))
 	resp.State.SetAttribute(ctx, path.Root("bearer"), types.BoolValue(false))
-
-	// Set account seed and generate JWT/creds if provided
-	if accountSeed != "" {
-		resp.State.SetAttribute(ctx, path.Root("account_seed"), types.StringValue(accountSeed))
-
-		// Generate a fresh JWT
-		accKP, _ := nkeys.FromSeed([]byte(accountSeed))
-		accPubKey, _ := accKP.PublicKey()
-
-		claims := jwt.NewUserClaims(publicKey)
-		claims.Name = name
-		claims.IssuerAccount = accPubKey
-
-		// Encode JWT
-		userJWT, err := claims.Encode(accKP)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to generate JWT", fmt.Sprintf("Failed to encode user JWT: %v", err))
-			return
-		}
-		resp.State.SetAttribute(ctx, path.Root("jwt"), types.StringValue(userJWT))
-
-		// Create creds file content
-		creds := fmt.Sprintf("-----BEGIN NATS USER JWT-----\n%s\n------END NATS USER JWT------\n\n-----BEGIN USER NKEY SEED-----\n%s\n------END USER NKEY SEED------\n", userJWT, strings.TrimSpace(userSeed))
-		resp.State.SetAttribute(ctx, path.Root("creds"), types.StringValue(creds))
-	} else {
-		resp.State.SetAttribute(ctx, path.Root("account_seed"), types.StringNull())
-		resp.State.SetAttribute(ctx, path.Root("jwt"), types.StringNull())
-		resp.State.SetAttribute(ctx, path.Root("creds"), types.StringNull())
-	}
+	resp.State.SetAttribute(ctx, path.Root("jwt"), types.StringValue(userJWT))
+	resp.State.SetAttribute(ctx, path.Root("public_key"), types.StringValue(subject))
 
 	// Set empty lists for permissions
 	resp.State.SetAttribute(ctx, path.Root("allow_pub"), types.ListNull(types.StringType))

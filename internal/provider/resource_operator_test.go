@@ -20,16 +20,14 @@ func TestAccOperatorResource_basic(t *testing.T) {
 				Config: testAccOperatorResourceConfig("TestOperator"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("nsc_operator.test", "name", "TestOperator"),
-					resource.TestCheckResourceAttr("nsc_operator.test", "generate_signing_key", "false"),
 					resource.TestCheckResourceAttr("nsc_operator.test", "expiry", "0s"),
 					resource.TestCheckResourceAttr("nsc_operator.test", "start", "0s"),
 					resource.TestCheckResourceAttrSet("nsc_operator.test", "jwt"),
-					resource.TestCheckResourceAttrSet("nsc_operator.test", "seed"),
+					resource.TestCheckResourceAttrSet("nsc_operator.test", "subject"),
+					resource.TestCheckResourceAttrSet("nsc_operator.test", "issuer_seed"),
 					resource.TestCheckResourceAttrSet("nsc_operator.test", "public_key"),
-					resource.TestCheckNoResourceAttr("nsc_operator.test", "signing_key"),
-					resource.TestCheckNoResourceAttr("nsc_operator.test", "signing_key_seed"),
 					testAccCheckOperatorPublicKeyFormat("nsc_operator.test", "public_key"),
-					testAccCheckOperatorSeedFormat("nsc_operator.test", "seed"),
+					testAccCheckOperatorPublicKeyFormat("nsc_operator.test", "subject"),
 				),
 			},
 			// ImportState testing
@@ -39,10 +37,10 @@ func TestAccOperatorResource_basic(t *testing.T) {
 				ImportStateVerify: true,
 				ImportStateIdFunc: testAccOperatorImportStateIdFunc("nsc_operator.test"),
 				ImportStateVerifyIgnore: []string{
-					"jwt",    // JWT contains timestamps
-					"expiry", // Default value handling
-					"start",  // Default value handling
-					"generate_signing_key",
+					"jwt",          // JWT contains timestamps
+					"expiry",       // Default value handling
+					"start",        // Default value handling
+					"signing_keys", // Empty list handling
 				},
 			},
 			// Update and Read testing
@@ -66,11 +64,8 @@ func TestAccOperatorResource_withSigningKey(t *testing.T) {
 				Config: testAccOperatorResourceConfigWithSigningKey("TestOperator"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("nsc_operator.test", "name", "TestOperator"),
-					resource.TestCheckResourceAttr("nsc_operator.test", "generate_signing_key", "true"),
-					resource.TestCheckResourceAttrSet("nsc_operator.test", "signing_key"),
-					resource.TestCheckResourceAttrSet("nsc_operator.test", "signing_key_seed"),
-					testAccCheckOperatorPublicKeyFormat("nsc_operator.test", "signing_key"),
-					testAccCheckOperatorSeedFormat("nsc_operator.test", "signing_key_seed"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "signing_keys.#", "1"),
+					resource.TestCheckResourceAttrSet("nsc_operator.test", "signing_keys.0"),
 				),
 			},
 		},
@@ -105,27 +100,49 @@ func TestAccOperatorResource_withExpiry(t *testing.T) {
 
 func testAccOperatorResourceConfig(name string) string {
 	return fmt.Sprintf(`
+resource "nsc_nkey" "operator" {
+  type = "operator"
+}
+
 resource "nsc_operator" "test" {
-  name = %[1]q
+  name        = %[1]q
+  subject     = nsc_nkey.operator.public_key
+  issuer_seed = nsc_nkey.operator.seed
 }
 `, name)
 }
 
 func testAccOperatorResourceConfigWithSigningKey(name string) string {
 	return fmt.Sprintf(`
+resource "nsc_nkey" "operator" {
+  type = "operator"
+}
+
+resource "nsc_nkey" "signing_key" {
+  type = "operator"
+}
+
 resource "nsc_operator" "test" {
-  name                 = %[1]q
-  generate_signing_key = true
+  name         = %[1]q
+  subject      = nsc_nkey.operator.public_key
+  issuer_seed  = nsc_nkey.operator.seed
+  signing_keys = [nsc_nkey.signing_key.public_key]
 }
 `, name)
 }
 
 func testAccOperatorResourceConfigWithExpiry(name, expiry, start string) string {
 	return fmt.Sprintf(`
+resource "nsc_nkey" "operator" {
+  type = "operator"
+}
+
 resource "nsc_operator" "test" {
-  name   = %[1]q
-  expiry = %[2]q
-  start  = %[3]q
+  name        = %[1]q
+  subject     = nsc_nkey.operator.public_key
+  issuer_seed = nsc_nkey.operator.seed
+  expiry      = %[2]q
+  start       = %[3]q
 }
 `, name, expiry, start)
 }
@@ -195,13 +212,13 @@ func testAccOperatorImportStateIdFunc(resourceName string) resource.ImportStateI
 		}
 
 		name := rs.Primary.Attributes["name"]
-		seed := rs.Primary.Attributes["seed"]
+		issuerSeed := rs.Primary.Attributes["issuer_seed"]
 
-		if name == "" || seed == "" {
-			return "", fmt.Errorf("Name or seed not found in state")
+		if name == "" || issuerSeed == "" {
+			return "", fmt.Errorf("Name or issuer_seed not found in state")
 		}
 
-		// Format: name/seed
-		return fmt.Sprintf("%s/%s", name, seed), nil
+		// Format: name/issuer_seed
+		return fmt.Sprintf("%s/%s", name, issuerSeed), nil
 	}
 }

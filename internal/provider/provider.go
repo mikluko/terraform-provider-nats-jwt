@@ -41,16 +41,17 @@ func (p *NSCProvider) Configure(ctx context.Context, req provider.ConfigureReque
 
 func (p *NSCProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
+		NewNKeyResource,
 		NewOperatorResource,
 		NewAccountResource,
-		NewAccountKeyResource,
-		NewAccountJWTResource,
 		NewUserResource,
 	}
 }
 
 func (p *NSCProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{}
+	return []func() datasource.DataSource{
+		NewCredsDataSource,
+	}
 }
 
 func (p *NSCProvider) Functions(ctx context.Context) []func() function.Function {

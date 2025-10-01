@@ -1,32 +1,49 @@
 terraform {
   required_providers {
-    natsjwt = {
-      source = "mikluko/nats-jwt"
+    nsc = {
+      source = "mikluko/nsc"
     }
   }
 }
 
-provider "natsjwt" {
-  # Provider configuration for JWT management
-  # Could optionally include paths for keystore, config dir, etc.
+provider "nsc" {}
+
+# Generate keys
+resource "nsc_nkey" "operator" {
+  type = "operator"
 }
 
-# Create an operator - the root of the JWT hierarchy
-resource "nsc_operator" "main" {
-  name = "MyOperator"
+resource "nsc_nkey" "operator_signing" {
+  type = "operator"
+}
 
-  # Optional: generate a signing key with the operator
-  generate_signing_key = true
+resource "nsc_nkey" "account" {
+  type = "account"
+}
+
+resource "nsc_nkey" "user" {
+  type = "user"
+}
+
+# Create operator JWT
+resource "nsc_operator" "main" {
+  name        = "MyOperator"
+  subject     = nsc_nkey.operator.public_key
+  issuer_seed = nsc_nkey.operator.seed
+
+  # Optional: signing key for signing account JWTs
+  signing_keys = [nsc_nkey.operator_signing.public_key]
 
   # Optional: JWT validity
   expiry = "8760h" # 1 year
-  start  = "0"     # valid immediately
+  start  = "0s"    # valid immediately
 }
 
-# Create an account under the operator
+# Create account JWT
 resource "nsc_account" "app" {
-  name          = "ApplicationAccount"
-  operator_seed = nsc_operator.main.seed
+  name        = "ApplicationAccount"
+  subject     = nsc_nkey.account.public_key
+  issuer_seed = nsc_nkey.operator.seed
 
   # Default permissions for all users in this account
   allow_pub = ["app.>"]
@@ -40,13 +57,14 @@ resource "nsc_account" "app" {
 
   # JWT validity
   expiry = "8760h" # 1 year
-  start  = "0"     # valid immediately
+  start  = "0s"    # valid immediately
 }
 
-# Create a user under the account
+# Create user JWT
 resource "nsc_user" "service" {
-  name         = "backend-service"
-  account_seed = nsc_account.app.seed
+  name        = "backend-service"
+  subject     = nsc_nkey.user.public_key
+  issuer_seed = nsc_nkey.account.seed
 
   # User-specific permissions (overrides account defaults)
   allow_pub = ["app.events.>", "app.requests.>"]
@@ -55,7 +73,7 @@ resource "nsc_user" "service" {
   deny_sub  = ["app.secrets.>"]
 
   # Allow this user to publish responses
-  allow_pub_response = 5 # Can publish up to 5 responses
+  allow_pub_response = 5    # Can publish up to 5 responses
   response_ttl       = "10s"
 
   # Optional: tags for organizational purposes
@@ -66,10 +84,16 @@ resource "nsc_user" "service" {
 
   # JWT validity
   expiry = "720h" # 30 days
-  start  = "0"    # valid immediately
+  start  = "0s"   # valid immediately
 
   # Optional: bearer token (no connect challenge required)
   bearer = false
+}
+
+# Generate credentials file
+data "nsc_creds" "service" {
+  jwt  = nsc_user.service.jwt
+  seed = nsc_nkey.user.seed
 }
 
 # Output the generated JWTs and keys
@@ -82,8 +106,8 @@ output "operator_public_key" {
   value = nsc_operator.main.public_key
 }
 
-output "operator_signing_key" {
-  value     = nsc_operator.main.signing_key
+output "operator_signing_keys" {
+  value     = nsc_operator.main.signing_keys
   sensitive = true
 }
 
@@ -101,13 +125,8 @@ output "user_jwt" {
   sensitive = true
 }
 
-output "user_seed" {
-  value     = nsc_user.service.seed
-  sensitive = true
-}
-
 output "user_creds" {
-  value       = nsc_user.service.creds
+  value       = data.nsc_creds.service.creds
   sensitive   = true
   description = "Credentials string containing JWT and seed for NATS client connection"
 }

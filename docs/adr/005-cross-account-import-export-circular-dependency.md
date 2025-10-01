@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by ADR-006 (Unified NKey Resource)
 
 ## Context
 

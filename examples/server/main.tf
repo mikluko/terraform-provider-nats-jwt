@@ -1,8 +1,8 @@
 terraform {
   required_providers {
-    natsjwt = {
-      source  = "registry.terraform.io/mikluko/nats-jwt"
-      version = "~> 0.1"
+    nsc = {
+      source  = "mikluko/nsc"
+      version = "~> 0.6"
     }
     local = {
       source  = "hashicorp/local"
@@ -24,18 +24,55 @@ provider "docker" {
   host = var.docker_host
 }
 
-# Create the operator with integrated system account
-resource "nsc_operator" "main" {
-  name                  = "MyOperator"
-  generate_signing_key  = true
-  create_system_account = true  # Creates system account automatically
-  system_account_name   = "SYS" # Optional, defaults to "SYS"
+# Generate keys
+resource "nsc_nkey" "operator" {
+  type = "operator"
 }
 
-# Create application account
+resource "nsc_nkey" "system_account" {
+  type = "account"
+}
+
+resource "nsc_nkey" "application_account" {
+  type = "account"
+}
+
+resource "nsc_nkey" "sys_admin" {
+  type = "user"
+}
+
+resource "nsc_nkey" "app_user" {
+  type = "user"
+}
+
+resource "nsc_nkey" "app_admin" {
+  type = "user"
+}
+
+# Create operator JWT
+resource "nsc_operator" "main" {
+  name           = "MyOperator"
+  subject        = nsc_nkey.operator.public_key
+  issuer_seed    = nsc_nkey.operator.seed
+  system_account = nsc_account.system.public_key
+}
+
+# Create system account JWT
+resource "nsc_account" "system" {
+  name        = "SYS"
+  subject     = nsc_nkey.system_account.public_key
+  issuer_seed = nsc_nkey.operator.seed
+
+  # Full access for system account
+  allow_pub = [">"]
+  allow_sub = [">"]
+}
+
+# Create application account JWT
 resource "nsc_account" "application" {
-  name          = "Application"
-  operator_seed = nsc_operator.main.seed
+  name        = "Application"
+  subject     = nsc_nkey.application_account.public_key
+  issuer_seed = nsc_nkey.operator.seed
 
   # Default permissions for users in this account
   allow_pub = ["app.>", "_INBOX.>"]
@@ -62,8 +99,9 @@ resource "nsc_account" "application" {
 
 # Create system account admin user
 resource "nsc_user" "sys_admin" {
-  name         = "sys_admin"
-  account_seed = nsc_operator.main.system_account_seed # Use system account seed from operator
+  name        = "sys_admin"
+  subject     = nsc_nkey.sys_admin.public_key
+  issuer_seed = nsc_nkey.system_account.seed
 
   # Full access to everything
   allow_pub = [">"]
@@ -72,8 +110,9 @@ resource "nsc_user" "sys_admin" {
 
 # Create application user with limited permissions
 resource "nsc_user" "app_user" {
-  name         = "app_user"
-  account_seed = nsc_account.application.seed
+  name        = "app_user"
+  subject     = nsc_nkey.app_user.public_key
+  issuer_seed = nsc_nkey.application_account.seed
 
   # Limited permissions - can't access admin topics
   allow_pub = ["app.data.>", "_INBOX.>"]
@@ -92,14 +131,31 @@ resource "nsc_user" "app_user" {
 
 # Create application admin user
 resource "nsc_user" "app_admin" {
-  name         = "app_admin"
-  account_seed = nsc_account.application.seed
+  name        = "app_admin"
+  subject     = nsc_nkey.app_admin.public_key
+  issuer_seed = nsc_nkey.application_account.seed
 
   # Full access within the application account
   allow_pub          = [">"]
   allow_sub          = [">"]
   allow_pub_response = 50
   response_ttl       = "10s"
+}
+
+# Generate credentials files
+data "nsc_creds" "sys_admin" {
+  jwt  = nsc_user.sys_admin.jwt
+  seed = nsc_nkey.sys_admin.seed
+}
+
+data "nsc_creds" "app_user" {
+  jwt  = nsc_user.app_user.jwt
+  seed = nsc_nkey.app_user.seed
+}
+
+data "nsc_creds" "app_admin" {
+  jwt  = nsc_user.app_admin.jwt
+  seed = nsc_nkey.app_admin.seed
 }
 
 # Generate NATS server configuration
@@ -113,13 +169,13 @@ locals {
     # JWT-based operator mode
     operator: ${nsc_operator.main.jwt}
 
-    # System account (created with operator)
-    system_account: ${nsc_operator.main.system_account}
+    # System account
+    system_account: ${nsc_account.system.public_key}
 
     # Resolver for JWT/Accounts
     resolver: MEMORY
     resolver_preload: {
-      ${nsc_operator.main.system_account}: ${nsc_operator.main.system_account_jwt}
+      ${nsc_account.system.public_key}: ${nsc_account.system.jwt}
       ${nsc_account.application.public_key}: ${nsc_account.application.jwt}
     }
 
@@ -160,21 +216,21 @@ resource "local_file" "nats_config" {
 # Write user credentials files
 resource "local_file" "app_user_creds" {
   filename = "${path.module}/creds/app_user.creds"
-  content  = nsc_user.app_user.creds
+  content  = data.nsc_creds.app_user.creds
 
   file_permission = "0600"
 }
 
 resource "local_file" "app_admin_creds" {
   filename = "${path.module}/creds/app_admin.creds"
-  content  = nsc_user.app_admin.creds
+  content  = data.nsc_creds.app_admin.creds
 
   file_permission = "0600"
 }
 
 resource "local_file" "sys_admin_creds" {
   filename = "${path.module}/creds/sys_admin.creds"
-  content  = nsc_user.sys_admin.creds
+  content  = data.nsc_creds.sys_admin.creds
 
   file_permission = "0600"
 }

@@ -56,7 +56,9 @@ type ImportModel struct {
 type AccountResourceModel struct {
 	ID               types.String         `tfsdk:"id"`
 	Name             types.String         `tfsdk:"name"`
-	OperatorSeed     types.String         `tfsdk:"operator_seed"`
+	Subject          types.String         `tfsdk:"subject"`
+	IssuerSeed       types.String         `tfsdk:"issuer_seed"`
+	SigningKeys      types.List           `tfsdk:"signing_keys"`
 	AllowPub         types.List           `tfsdk:"allow_pub"`
 	AllowSub         types.List           `tfsdk:"allow_sub"`
 	DenyPub          types.List           `tfsdk:"deny_pub"`
@@ -92,7 +94,6 @@ type AccountResourceModel struct {
 	Imports types.List `tfsdk:"import"`
 
 	JWT       types.String `tfsdk:"jwt"`
-	Seed      types.String `tfsdk:"seed"`
 	PublicKey types.String `tfsdk:"public_key"`
 }
 
@@ -116,13 +117,25 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Required:            true,
 				MarkdownDescription: "Account name",
 			},
-			"operator_seed": schema.StringAttribute{
+			"subject": schema.StringAttribute{
 				Required:            true,
-				Sensitive:           true,
-				MarkdownDescription: "Operator seed for signing the account JWT",
+				MarkdownDescription: "Account public key (subject of the JWT)",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+			},
+			"issuer_seed": schema.StringAttribute{
+				Required:            true,
+				Sensitive:           true,
+				MarkdownDescription: "Operator seed for signing the account JWT (issuer)",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"signing_keys": schema.ListAttribute{
+				ElementType:         types.StringType,
+				Optional:            true,
+				MarkdownDescription: "Optional signing key public keys (for signing user JWTs)",
 			},
 			"allow_pub": schema.ListAttribute{
 				ElementType:         types.StringType,
@@ -172,11 +185,6 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 			"jwt": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Generated JWT token",
-			},
-			"seed": schema.StringAttribute{
-				Computed:            true,
-				Sensitive:           true,
-				MarkdownDescription: "Account seed (private key)",
 			},
 			"public_key": schema.StringAttribute{
 				Computed:            true,
@@ -356,38 +364,29 @@ func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	// Generate account key pair
-	accountKP, err := nkeys.CreateAccount()
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to create account keypair", err.Error())
+	// Get account public key (subject)
+	accountPubKey := data.Subject.ValueString()
+	if !strings.HasPrefix(accountPubKey, "A") {
+		resp.Diagnostics.AddError(
+			"Invalid account public key",
+			fmt.Sprintf("Account public key must start with 'A', got: %s", accountPubKey[:1]),
+		)
 		return
 	}
 
-	accountPubKey, err := accountKP.PublicKey()
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to get account public key", err.Error())
-		return
-	}
-
-	accountSeed, err := accountKP.Seed()
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to get account seed", err.Error())
-		return
-	}
-
-	// Get operator public key from seed
-	operatorSeedStr := data.OperatorSeed.ValueString()
+	// Get operator seed (issuer) for signing
+	operatorSeedStr := data.IssuerSeed.ValueString()
 	if !strings.HasPrefix(operatorSeedStr, "SO") {
 		resp.Diagnostics.AddError(
 			"Invalid operator seed",
-			fmt.Sprintf("Operator seed must start with 'SO', got: %s...", operatorSeedStr[:2]),
+			fmt.Sprintf("Operator seed must start with 'SO', got: %s", operatorSeedStr[:2]),
 		)
 		return
 	}
 
 	operatorKP, err := nkeys.FromSeed([]byte(operatorSeedStr))
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to restore operator keypair", err.Error())
+		resp.Diagnostics.AddError("Failed to parse operator seed", err.Error())
 		return
 	}
 
@@ -657,6 +656,26 @@ func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
+	// Add signing keys if provided
+	if !data.SigningKeys.IsNull() && !data.SigningKeys.IsUnknown() {
+		var signingKeys []string
+		resp.Diagnostics.Append(data.SigningKeys.ElementsAs(ctx, &signingKeys, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		for _, key := range signingKeys {
+			if !strings.HasPrefix(key, "A") {
+				resp.Diagnostics.AddError(
+					"Invalid signing key",
+					fmt.Sprintf("Signing keys must be account public keys (start with 'A'), got: %s", key),
+				)
+				return
+			}
+			accountClaims.SigningKeys.Add(key)
+		}
+	}
+
 	// Sign the JWT with operator key (already have operatorKP from above)
 	accountJWT, err := accountClaims.Encode(operatorKP)
 	if err != nil {
@@ -667,7 +686,6 @@ func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest
 	// Set computed values
 	data.ID = types.StringValue(accountPubKey)
 	data.PublicKey = types.StringValue(accountPubKey)
-	data.Seed = types.StringValue(string(accountSeed))
 	data.JWT = types.StringValue(accountJWT)
 
 	tflog.Trace(ctx, "created account resource")
@@ -694,22 +712,16 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	// Get current state to preserve keys
+	// Get current state to preserve immutable fields
 	var state AccountResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Get operator public key from seed
-	operatorSeedStr := data.OperatorSeed.ValueString()
-	if !strings.HasPrefix(operatorSeedStr, "SO") {
-		resp.Diagnostics.AddError(
-			"Invalid operator seed",
-			fmt.Sprintf("Operator seed must start with 'SO', got: %s...", operatorSeedStr[:2]),
-		)
-		return
-	}
+	// Get account public key and operator seed from state (immutable)
+	accountPubKey := state.Subject.ValueString()
+	operatorSeedStr := state.IssuerSeed.ValueString()
 
 	operatorKP, err := nkeys.FromSeed([]byte(operatorSeedStr))
 	if err != nil {
@@ -723,17 +735,8 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	// Validate it's actually an operator key
-	if !strings.HasPrefix(operatorPubKey, "O") {
-		resp.Diagnostics.AddError(
-			"Invalid operator seed",
-			fmt.Sprintf("Seed does not generate an operator public key (expected O*, got %s)", operatorPubKey),
-		)
-		return
-	}
-
 	// Recreate account claims with updated values
-	accountClaims := jwt.NewAccountClaims(state.PublicKey.ValueString())
+	accountClaims := jwt.NewAccountClaims(accountPubKey)
 	accountClaims.Name = data.Name.ValueString()
 	accountClaims.Issuer = operatorPubKey
 
@@ -983,6 +986,26 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 		}
 	}
 
+	// Add signing keys if provided
+	if !data.SigningKeys.IsNull() && !data.SigningKeys.IsUnknown() {
+		var signingKeys []string
+		resp.Diagnostics.Append(data.SigningKeys.ElementsAs(ctx, &signingKeys, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		for _, key := range signingKeys {
+			if !strings.HasPrefix(key, "A") {
+				resp.Diagnostics.AddError(
+					"Invalid signing key",
+					fmt.Sprintf("Signing keys must be account public keys (start with 'A'), got: %s", key),
+				)
+				return
+			}
+			accountClaims.SigningKeys.Add(key)
+		}
+	}
+
 	// Sign the JWT with operator key (already have operatorKP from above)
 	accountJWT, err := accountClaims.Encode(operatorKP)
 	if err != nil {
@@ -990,10 +1013,11 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	// Update JWT while preserving keys
+	// Update JWT while preserving immutable fields
 	data.ID = state.ID
 	data.PublicKey = state.PublicKey
-	data.Seed = state.Seed
+	data.Subject = state.Subject
+	data.IssuerSeed = state.IssuerSeed
 	data.JWT = types.StringValue(accountJWT)
 
 	tflog.Trace(ctx, "updated account resource")
@@ -1014,158 +1038,92 @@ func (r *AccountResource) Delete(ctx context.Context, req resource.DeleteRequest
 }
 
 func (r *AccountResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Import formats:
-	// - seed (just the account seed)
-	// - name/seed
-	// - name/seed/operator_seed
+	// Import format: name/subject/issuer_seed
 	// Name can contain / encoded as // or %2F
 
 	parts := strings.Split(req.ID, "/")
 
-	var name string
-	var accountSeed string
-	var operatorSeed string
-
-	// Parse from the end - seeds have predictable format
-	// Check if last part is operator seed (SO) or account seed (SA)
-	// Format can be:
-	//   - seed (just account seed)
-	//   - name/seed (name and account seed)
-	//   - name/seed/operator_seed (all three)
-
-	if len(parts) == 0 {
+	if len(parts) < 2 {
 		resp.Diagnostics.AddError(
 			"Invalid import ID",
-			"Import ID must be: seed, name/seed, or name/seed/operator_seed",
+			"Import ID must be: name/subject/issuer_seed",
 		)
 		return
 	}
 
-	lastPart := parts[len(parts)-1]
-
-	// Check if the last part is an operator seed (for the 3-part format)
-	if strings.HasPrefix(lastPart, "SO") && len(parts) >= 2 {
-		// Format: name/account_seed/operator_seed
-		operatorSeed = lastPart
-		accountSeed = parts[len(parts)-2]
-
-		// Validate account seed
-		if !strings.HasPrefix(accountSeed, "SA") {
-			resp.Diagnostics.AddError(
-				"Invalid account seed",
-				fmt.Sprintf("Expected account seed starting with 'SA', got: %s", accountSeed),
-			)
-			return
-		}
-
-		// Name is everything before the seeds
-		if len(parts) > 2 {
-			nameParts := parts[:len(parts)-2]
-			name = strings.Join(nameParts, "/")
-		}
-	} else if strings.HasPrefix(lastPart, "SA") {
-		// Format: seed or name/seed (no operator seed)
-		accountSeed = lastPart
-
-		// Check if we have a name
-		if len(parts) > 1 {
-			nameParts := parts[:len(parts)-1]
-			name = strings.Join(nameParts, "/")
-		}
-	} else {
+	// Last part is the issuer seed (operator seed)
+	issuerSeed := parts[len(parts)-1]
+	if !strings.HasPrefix(issuerSeed, "SO") {
 		resp.Diagnostics.AddError(
-			"Invalid seed format",
-			fmt.Sprintf("Expected account seed (SA*) or operator seed (SO*), got: %s", lastPart),
+			"Invalid issuer seed",
+			fmt.Sprintf("Expected operator seed starting with 'SO', got: %s", issuerSeed),
 		)
 		return
 	}
+
+	// Second to last part is the subject (account public key)
+	subject := parts[len(parts)-2]
+	if !strings.HasPrefix(subject, "A") {
+		resp.Diagnostics.AddError(
+			"Invalid subject",
+			fmt.Sprintf("Expected account public key starting with 'A', got: %s", subject),
+		)
+		return
+	}
+
+	// Everything before is the name
+	nameParts := parts[:len(parts)-2]
+	name := strings.Join(nameParts, "/")
 
 	// Decode name (handle // and %2F encodings)
-	if name != "" {
-		name = strings.ReplaceAll(name, "//", "\x00") // Temporary placeholder
-		name = strings.ReplaceAll(name, "%2F", "/")
-		name = strings.ReplaceAll(name, "\x00", "/") // Replace placeholder with /
-	} else {
-		name = "imported-account"
-	}
+	name = strings.ReplaceAll(name, "//", "\x00") // Temporary placeholder
+	name = strings.ReplaceAll(name, "%2F", "/")
+	name = strings.ReplaceAll(name, "\x00", "/") // Replace placeholder with /
 
-	// Validate the account seed
-	kp, err := nkeys.FromSeed([]byte(accountSeed))
+	// Validate the issuer seed
+	opKP, err := nkeys.FromSeed([]byte(issuerSeed))
 	if err != nil {
-		resp.Diagnostics.AddError("Invalid account seed", fmt.Sprintf("Failed to parse seed: %v", err))
+		resp.Diagnostics.AddError("Invalid issuer seed", fmt.Sprintf("Failed to parse seed: %v", err))
 		return
 	}
 
-	publicKey, err := kp.PublicKey()
+	opPubKey, err := opKP.PublicKey()
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid keypair", fmt.Sprintf("Failed to get public key: %v", err))
 		return
 	}
 
-	// Validate it's an account key
-	if !strings.HasPrefix(publicKey, "A") {
+	// Validate it's an operator key
+	if !strings.HasPrefix(opPubKey, "O") {
 		resp.Diagnostics.AddError(
 			"Invalid key type",
-			fmt.Sprintf("Seed does not generate an account public key (expected A*, got %s)", publicKey),
+			fmt.Sprintf("Issuer seed does not generate an operator public key (expected O*, got %s)", opPubKey),
 		)
 		return
 	}
 
-	// If no operator seed provided, we can't sign JWTs, but we can still import
-	if operatorSeed == "" {
-		resp.Diagnostics.AddWarning(
-			"No operator seed provided",
-			"Account imported without operator seed. You'll need to provide operator_seed to regenerate JWTs.",
-		)
-	} else {
-		// Validate operator seed
-		opKP, err := nkeys.FromSeed([]byte(operatorSeed))
-		if err != nil {
-			resp.Diagnostics.AddError("Invalid operator seed", fmt.Sprintf("Failed to parse operator seed: %v", err))
-			return
-		}
-		opPubKey, err := opKP.PublicKey()
-		if err == nil && !strings.HasPrefix(opPubKey, "O") {
-			resp.Diagnostics.AddError(
-				"Invalid operator seed",
-				fmt.Sprintf("Operator seed does not generate an operator public key (expected O*, got %s)", opPubKey),
-			)
-			return
-		}
+	// Generate a fresh JWT
+	claims := jwt.NewAccountClaims(subject)
+	claims.Name = name
+
+	// Encode JWT
+	accountJWT, err := claims.Encode(opKP)
+	if err != nil {
+		resp.Diagnostics.AddError("Failed to generate JWT", fmt.Sprintf("Failed to encode account JWT: %v", err))
+		return
 	}
 
 	// Set state attributes
-	resp.State.SetAttribute(ctx, path.Root("id"), types.StringValue(publicKey))
-	resp.State.SetAttribute(ctx, path.Root("public_key"), types.StringValue(publicKey))
-	resp.State.SetAttribute(ctx, path.Root("seed"), types.StringValue(accountSeed))
+	resp.State.SetAttribute(ctx, path.Root("id"), types.StringValue(subject))
 	resp.State.SetAttribute(ctx, path.Root("name"), types.StringValue(name))
+	resp.State.SetAttribute(ctx, path.Root("subject"), types.StringValue(subject))
+	resp.State.SetAttribute(ctx, path.Root("issuer_seed"), types.StringValue(issuerSeed))
+	resp.State.SetAttribute(ctx, path.Root("signing_keys"), types.ListNull(types.StringType))
 	resp.State.SetAttribute(ctx, path.Root("expiry"), timetypes.NewGoDurationValue(0))
 	resp.State.SetAttribute(ctx, path.Root("start"), timetypes.NewGoDurationValue(0))
 	resp.State.SetAttribute(ctx, path.Root("allow_pub_response"), types.Int64Value(0))
-
-	// Set operator seed if provided
-	if operatorSeed != "" {
-		resp.State.SetAttribute(ctx, path.Root("operator_seed"), types.StringValue(operatorSeed))
-
-		// Generate a fresh JWT
-		opKP, _ := nkeys.FromSeed([]byte(operatorSeed))
-		opPubKey, _ := opKP.PublicKey()
-
-		claims := jwt.NewAccountClaims(publicKey)
-		claims.Name = name
-		claims.Issuer = opPubKey
-
-		// Encode JWT
-		accountJWT, err := claims.Encode(opKP)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to generate JWT", fmt.Sprintf("Failed to encode account JWT: %v", err))
-			return
-		}
-		resp.State.SetAttribute(ctx, path.Root("jwt"), types.StringValue(accountJWT))
-	} else {
-		resp.State.SetAttribute(ctx, path.Root("operator_seed"), types.StringNull())
-		resp.State.SetAttribute(ctx, path.Root("jwt"), types.StringNull())
-	}
+	resp.State.SetAttribute(ctx, path.Root("jwt"), types.StringValue(accountJWT))
+	resp.State.SetAttribute(ctx, path.Root("public_key"), types.StringValue(subject))
 
 	// Set empty lists for permissions
 	resp.State.SetAttribute(ctx, path.Root("allow_pub"), types.ListNull(types.StringType))
