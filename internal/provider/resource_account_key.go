@@ -190,51 +190,16 @@ func (r *AccountKeyResource) Delete(ctx context.Context, req resource.DeleteRequ
 }
 
 func (r *AccountKeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Import formats:
-	// - seed (just the account seed)
-	// - name/seed
-	// Name can contain / encoded as // or %2F
+	// Import format: just the account seed (starts with SA)
+	accountSeed := req.ID
 
-	parts := strings.Split(req.ID, "/")
-
-	var name string
-	var accountSeed string
-
-	// Parse from the end - seeds have predictable format
-	// Last part should be account seed (starts with SA)
-
-	if len(parts) == 0 {
-		resp.Diagnostics.AddError(
-			"Invalid import ID",
-			"Import ID must be: seed or name/seed",
-		)
-		return
-	}
-
-	// Check if last part is a valid account seed
-	lastPart := parts[len(parts)-1]
-	if !strings.HasPrefix(lastPart, "SA") {
+	// Validate it's an account seed
+	if !strings.HasPrefix(accountSeed, "SA") {
 		resp.Diagnostics.AddError(
 			"Invalid account seed",
-			fmt.Sprintf("Expected account seed starting with 'SA', got: %s", lastPart),
+			fmt.Sprintf("Import ID must be an account seed starting with 'SA', got: %s", accountSeed),
 		)
 		return
-	}
-	accountSeed = lastPart
-
-	// Name is everything before the seed
-	if len(parts) > 1 {
-		nameParts := parts[:len(parts)-1]
-		name = strings.Join(nameParts, "/")
-	}
-
-	// Decode name (handle // and %2F encodings)
-	if name != "" {
-		name = strings.ReplaceAll(name, "//", "\x00") // Temporary placeholder
-		name = strings.ReplaceAll(name, "%2F", "/")
-		name = strings.ReplaceAll(name, "\x00", "/") // Replace placeholder with /
-	} else {
-		name = "imported-account"
 	}
 
 	// Validate the account seed
@@ -263,5 +228,5 @@ func (r *AccountKeyResource) ImportState(ctx context.Context, req resource.Impor
 	resp.State.SetAttribute(ctx, path.Root("id"), types.StringValue(publicKey))
 	resp.State.SetAttribute(ctx, path.Root("public_key"), types.StringValue(publicKey))
 	resp.State.SetAttribute(ctx, path.Root("seed"), types.StringValue(accountSeed))
-	resp.State.SetAttribute(ctx, path.Root("name"), types.StringValue(name))
+	resp.State.SetAttribute(ctx, path.Root("name"), types.StringValue("imported-account"))
 }
