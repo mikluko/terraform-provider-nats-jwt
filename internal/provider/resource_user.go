@@ -95,22 +95,22 @@ func (r *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"allow_pub": schema.ListAttribute{
 				ElementType:         types.StringType,
 				Optional:            true,
-				MarkdownDescription: "Publish permissions",
+				MarkdownDescription: "Publish permissions. If not specified, inherits from account default permissions.",
 			},
 			"allow_sub": schema.ListAttribute{
 				ElementType:         types.StringType,
 				Optional:            true,
-				MarkdownDescription: "Subscribe permissions",
+				MarkdownDescription: "Subscribe permissions. If not specified, inherits from account default permissions.",
 			},
 			"deny_pub": schema.ListAttribute{
 				ElementType:         types.StringType,
 				Optional:            true,
-				MarkdownDescription: "Deny publish permissions",
+				MarkdownDescription: "Deny publish permissions. If not specified, inherits from account default permissions.",
 			},
 			"deny_sub": schema.ListAttribute{
 				ElementType:         types.StringType,
 				Optional:            true,
-				MarkdownDescription: "Deny subscribe permissions",
+				MarkdownDescription: "Deny subscribe permissions. If not specified, inherits from account default permissions.",
 			},
 			"allow_pub_response": schema.Int64Attribute{
 				Optional:            true,

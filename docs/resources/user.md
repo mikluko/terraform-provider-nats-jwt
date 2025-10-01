@@ -23,13 +23,13 @@ Manages a NATS JWT User
 
 ### Optional
 
-- `allow_pub` (List of String) Publish permissions
+- `allow_pub` (List of String) Publish permissions. If not specified, inherits from account default permissions.
 - `allow_pub_response` (Number) Allow publishing to reply subjects
-- `allow_sub` (List of String) Subscribe permissions
+- `allow_sub` (List of String) Subscribe permissions. If not specified, inherits from account default permissions.
 - `allowed_connection_types` (List of String) Allowed connection types (STANDARD, WEBSOCKET, LEAFNODE, LEAFNODE_WS, MQTT, MQTT_WS, IN_PROCESS)
 - `bearer` (Boolean) No connect challenge required for user
-- `deny_pub` (List of String) Deny publish permissions
-- `deny_sub` (List of String) Deny subscribe permissions
+- `deny_pub` (List of String) Deny publish permissions. If not specified, inherits from account default permissions.
+- `deny_sub` (List of String) Deny subscribe permissions. If not specified, inherits from account default permissions.
 - `expiry` (String) Valid until (e.g., '720h' for 30 days, '0s' for no expiry)
 - `max_data` (Number) Maximum number of bytes (-1 for unlimited)
 - `max_payload` (Number) Maximum message payload in bytes (-1 for unlimited)
