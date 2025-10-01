@@ -61,6 +61,36 @@ go generate ./...
 golangci-lint run
 ```
 
+### Release Process
+
+Complete release workflow:
+
+```bash
+# 1. Regenerate documentation
+go generate ./...
+
+# 2. Run full test suite
+go test ./internal/provider -v -count=1 -timeout 60s
+
+# 3. Commit any documentation updates
+git add docs/
+git commit -m "docs: update documentation"
+
+# 4. Create release tag with changelog
+# Use EffVer versioning: MACRO.MESO.MICRO
+# - MACRO: Significant effort (major breaking changes)
+# - MESO: Some effort (new features, minor breaking changes)
+# - MICRO: No effort (bug fixes, backward-compatible)
+git tag -a v0.x.y -m "Release message with changelog"
+
+# 5. Push commits and tags
+git push origin main
+git push origin v0.x.y
+
+# 6. Run GoReleaser (builds and publishes to GitHub)
+goreleaser release --clean
+```
+
 ## Architecture
 
 ### Resource Hierarchy
