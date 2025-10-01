@@ -3,12 +3,12 @@
 page_title: "nsc_operator Resource - nsc"
 subcategory: ""
 description: |-
-  Manages a NATS JWT Operator
+  Manages a NATS JWT Operator. Use with nsc_nkey for key generation.
 ---
 
 # nsc_operator (Resource)
 
-Manages a NATS JWT Operator
+Manages a NATS JWT Operator. Use with nsc_nkey for key generation.
 
 
 
@@ -17,24 +17,19 @@ Manages a NATS JWT Operator
 
 ### Required
 
+- `issuer_seed` (String, Sensitive) Operator seed for signing the JWT (issuer). For operators, this is the same as subject's seed (self-issued).
 - `name` (String) Operator name
+- `subject` (String) Operator public key (subject of the JWT)
 
 ### Optional
 
-- `create_system_account` (Boolean) Create and manage a system account for this operator
 - `expiry` (String) Valid until (e.g., '8760h' for 1 year, '0s' for no expiry)
-- `generate_signing_key` (Boolean) Generate a signing key with the operator
+- `signing_keys` (List of String) Optional signing key public keys (for signing account JWTs)
 - `start` (String) Valid from (e.g., '72h' for 3 days, '0s' for immediately)
-- `system_account_name` (String) Name for the system account (defaults to 'SYS')
+- `system_account` (String) System account public key reference
 
 ### Read-Only
 
 - `id` (String) Operator identifier (public key)
 - `jwt` (String) Generated JWT token
-- `public_key` (String) Operator public key
-- `seed` (String, Sensitive) Operator seed (private key)
-- `signing_key` (String) Signing key public key (if generated)
-- `signing_key_seed` (String, Sensitive) Signing key seed (if generated)
-- `system_account` (String) System account public key (if created)
-- `system_account_jwt` (String) System account JWT (if created)
-- `system_account_seed` (String, Sensitive) System account seed (if created)
+- `public_key` (String) Operator public key (same as subject)

@@ -17,8 +17,9 @@ Manages a NATS JWT User
 
 ### Required
 
-- `account_seed` (String, Sensitive) Account seed for signing the user JWT
+- `issuer_seed` (String, Sensitive) Account seed for signing the user JWT (issuer)
 - `name` (String) User name
+- `subject` (String) User public key (subject of the JWT)
 
 ### Optional
 
@@ -40,8 +41,6 @@ Manages a NATS JWT User
 
 ### Read-Only
 
-- `creds` (String, Sensitive) Credentials string containing JWT and seed for NATS client connection
 - `id` (String) User identifier (public key)
 - `jwt` (String) Generated JWT token
-- `public_key` (String) User public key
-- `seed` (String, Sensitive) User seed (private key)
+- `public_key` (String) User public key (same as subject)

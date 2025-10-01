@@ -28,14 +28,14 @@ NATS JWT authentication follows a three-level hierarchy:
 ```terraform
 terraform {
   required_providers {
-    natsjwt = {
-      source  = "mikluko/nats-jwt"
+    nsc = {
+      source  = "mikluko/nsc"
       version = "~> 0.1"
     }
   }
 }
 
-provider "natsjwt" {
+provider "nsc" {
   # This provider has no configuration options
   # All JWT tokens and keys are managed through resources
 }

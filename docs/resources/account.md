@@ -17,8 +17,9 @@ Manages a NATS JWT Account
 
 ### Required
 
+- `issuer_seed` (String, Sensitive) Operator seed for signing the account JWT (issuer)
 - `name` (String) Account name
-- `operator_seed` (String, Sensitive) Operator seed for signing the account JWT
+- `subject` (String) Account public key (subject of the JWT)
 
 ### Optional
 
@@ -48,6 +49,7 @@ Manages a NATS JWT Account
 - `max_streams` (Number) Maximum number of streams (-1 for unlimited)
 - `max_subscriptions` (Number) Maximum number of subscriptions (-1 for unlimited)
 - `response_ttl` (String) Time limit for response permissions
+- `signing_keys` (List of String) Optional signing key public keys (for signing user JWTs)
 - `start` (String) Valid from (e.g., '72h' for 3 days, '0s' for immediately)
 
 ### Read-Only
@@ -55,7 +57,6 @@ Manages a NATS JWT Account
 - `id` (String) Account identifier (public key)
 - `jwt` (String) Generated JWT token
 - `public_key` (String) Account public key
-- `seed` (String, Sensitive) Account seed (private key)
 
 <a id="nestedblock--export"></a>
 ### Nested Schema for `export`

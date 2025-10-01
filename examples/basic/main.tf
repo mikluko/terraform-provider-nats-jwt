@@ -73,7 +73,7 @@ resource "nsc_user" "service" {
   deny_sub  = ["app.secrets.>"]
 
   # Allow this user to publish responses
-  allow_pub_response = 5    # Can publish up to 5 responses
+  allow_pub_response = 5 # Can publish up to 5 responses
   response_ttl       = "10s"
 
   # Optional: tags for organizational purposes
