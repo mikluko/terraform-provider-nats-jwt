@@ -66,33 +66,31 @@ golangci-lint run
 Complete release workflow:
 
 ```bash
-# 1. Regenerate documentation
-go generate ./...
+# 1. Format and generate docs
+go fmt ./... && go generate ./...
 
-# 2. Run go fmt
-go fmt ./...
-
-# 3. Run full test suite
+# 2. Run tests (validates formatting/doc changes didn't break anything)
 go test ./internal/provider -v -count=1 -timeout 60s
 
-# 4. Commit any documentation updates
-git add docs/
-git commit -m "docs: update documentation"
+# 3. Commit any changes (formatting, docs)
+git add -A && git commit -m "chore: prepare release" || echo "No changes to commit"
 
-# 5. Create release tag with changelog
+# 4. Create release tag with changelog
 # Use EffVer versioning: MACRO.MESO.MICRO
 # - MACRO: Significant effort (major breaking changes)
 # - MESO: Some effort (new features, minor breaking changes)
 # - MICRO: No effort (bug fixes, backward-compatible)
 git tag -a v0.x.y -m "Release message with changelog"
 
-# 6. Push commits and tags
-git push origin main
-git push origin v0.x.y
-
-# 7. Run GoReleaser (builds and publishes to GitHub)
-goreleaser release --clean
+# 5. Push commits and tags, then release
+git push origin main --tags && goreleaser release --clean
 ```
+
+**Notes:**
+- Step 1 formats code and generates docs first
+- Step 2 validates that formatting/doc changes didn't introduce bugs
+- Step 3 uses `|| echo` to avoid failure if there are no changes to commit
+- Step 5 combines push and release into one step
 
 ## Architecture
 
