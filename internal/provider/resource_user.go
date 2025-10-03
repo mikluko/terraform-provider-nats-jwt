@@ -51,6 +51,10 @@ type UserResourceModel struct {
 
 	Expiry       timetypes.GoDuration `tfsdk:"expiry"`
 	Start        timetypes.GoDuration `tfsdk:"start"`
+	ExpiresIn    timetypes.GoDuration `tfsdk:"expires_in"`
+	ExpiresAt    timetypes.RFC3339    `tfsdk:"expires_at"`
+	StartsIn     timetypes.GoDuration `tfsdk:"starts_in"`
+	StartsAt     timetypes.RFC3339    `tfsdk:"starts_at"`
 	JWT          types.String         `tfsdk:"jwt"`
 	JWTSensitive types.String         `tfsdk:"jwt_sensitive"`
 	PublicKey    types.String         `tfsdk:"public_key"`
@@ -152,6 +156,28 @@ func (r *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Default:             stringdefault.StaticString("0s"),
 				MarkdownDescription: "Valid from (e.g., '72h' for 3 days, '0s' for immediately)",
 			},
+			"expires_in": schema.StringAttribute{
+				CustomType:          timetypes.GoDurationType{},
+				Optional:            true,
+				MarkdownDescription: "Relative expiry duration (e.g., '720h' for 30 days). Mutually exclusive with expires_at.",
+			},
+			"expires_at": schema.StringAttribute{
+				CustomType:          timetypes.RFC3339Type{},
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Absolute expiry timestamp (RFC3339). Can be specified directly or computed from expires_in. Mutually exclusive with expires_in.",
+			},
+			"starts_in": schema.StringAttribute{
+				CustomType:          timetypes.GoDurationType{},
+				Optional:            true,
+				MarkdownDescription: "Relative start delay (e.g., '72h' for 3 days). Mutually exclusive with starts_at.",
+			},
+			"starts_at": schema.StringAttribute{
+				CustomType:          timetypes.RFC3339Type{},
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Absolute start timestamp (RFC3339). Can be specified directly or computed from starts_in. Mutually exclusive with starts_in.",
+			},
 			"jwt": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Generated JWT token. Only populated when bearer = false. For bearer tokens, use jwt_sensitive instead.",
@@ -185,6 +211,51 @@ func (r *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				MarkdownDescription: "Allowed connection types (STANDARD, WEBSOCKET, LEAFNODE, LEAFNODE_WS, MQTT, MQTT_WS, IN_PROCESS)",
 			},
 		},
+	}
+}
+
+func (r *UserResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data UserResourceModel
+
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Validate expiry attributes are mutually exclusive
+	expiryCount := 0
+	if !data.Expiry.IsNull() && !data.Expiry.IsUnknown() {
+		expiryCount++
+	}
+	if !data.ExpiresIn.IsNull() && !data.ExpiresIn.IsUnknown() {
+		expiryCount++
+	}
+	if !data.ExpiresAt.IsNull() && !data.ExpiresAt.IsUnknown() {
+		expiryCount++
+	}
+	if expiryCount > 1 {
+		resp.Diagnostics.AddError(
+			"Conflicting Expiry Configuration",
+			"Only one of 'expires_in' or 'expires_at' can be specified.",
+		)
+	}
+
+	// Validate start attributes are mutually exclusive
+	startCount := 0
+	if !data.Start.IsNull() && !data.Start.IsUnknown() {
+		startCount++
+	}
+	if !data.StartsIn.IsNull() && !data.StartsIn.IsUnknown() {
+		startCount++
+	}
+	if !data.StartsAt.IsNull() && !data.StartsAt.IsUnknown() {
+		startCount++
+	}
+	if startCount > 1 {
+		resp.Diagnostics.AddError(
+			"Conflicting Start Configuration",
+			"Only one of 'starts_in' or 'starts_at' can be specified.",
+		)
 	}
 }
 
@@ -324,28 +395,90 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 		userClaims.Src = networks
 	}
 
-	// Handle expiry
-	if !data.Expiry.IsNull() && !data.Expiry.IsUnknown() {
+	// Handle expiry (support old, new, and absolute variants)
+	var expiresAtTime time.Time
+	if !data.ExpiresIn.IsNull() && !data.ExpiresIn.IsUnknown() {
+		// New relative duration - compute and store absolute
+		duration, diags := data.ExpiresIn.ValueGoDuration()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if duration != 0 {
+			expiresAtTime = time.Now().Add(duration)
+			data.ExpiresAt = timetypes.NewRFC3339TimeValue(expiresAtTime)
+			userClaims.Expires = expiresAtTime.Unix()
+		} else {
+			data.ExpiresAt = timetypes.NewRFC3339Null()
+		}
+	} else if !data.ExpiresAt.IsNull() && !data.ExpiresAt.IsUnknown() {
+		// Absolute timestamp provided
+		expiresAtTime, diags := data.ExpiresAt.ValueRFC3339Time()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		userClaims.Expires = expiresAtTime.Unix()
+	} else if !data.Expiry.IsNull() && !data.Expiry.IsUnknown() {
+		// Old deprecated attribute - keep for backward compatibility
 		duration, diags := data.Expiry.ValueGoDuration()
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 		if duration != 0 {
-			userClaims.Expires = time.Now().Add(duration).Unix()
+			expiresAtTime = time.Now().Add(duration)
+			data.ExpiresAt = timetypes.NewRFC3339TimeValue(expiresAtTime)
+			userClaims.Expires = expiresAtTime.Unix()
+		} else {
+			data.ExpiresAt = timetypes.NewRFC3339Null()
 		}
+	} else {
+		// No expiry specified - set to null
+		data.ExpiresAt = timetypes.NewRFC3339Null()
 	}
 
-	// Handle start time
-	if !data.Start.IsNull() && !data.Start.IsUnknown() {
+	// Handle start time (support old, new, and absolute variants)
+	var startsAtTime time.Time
+	if !data.StartsIn.IsNull() && !data.StartsIn.IsUnknown() {
+		// New relative duration - compute and store absolute
+		duration, diags := data.StartsIn.ValueGoDuration()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if duration != 0 {
+			startsAtTime = time.Now().Add(duration)
+			data.StartsAt = timetypes.NewRFC3339TimeValue(startsAtTime)
+			userClaims.NotBefore = startsAtTime.Unix()
+		} else {
+			data.StartsAt = timetypes.NewRFC3339Null()
+		}
+	} else if !data.StartsAt.IsNull() && !data.StartsAt.IsUnknown() {
+		// Absolute timestamp provided
+		startsAtTime, diags := data.StartsAt.ValueRFC3339Time()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		userClaims.NotBefore = startsAtTime.Unix()
+	} else if !data.Start.IsNull() && !data.Start.IsUnknown() {
+		// Old deprecated attribute - keep for backward compatibility
 		duration, diags := data.Start.ValueGoDuration()
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 		if duration != 0 {
-			userClaims.NotBefore = time.Now().Add(duration).Unix()
+			startsAtTime = time.Now().Add(duration)
+			data.StartsAt = timetypes.NewRFC3339TimeValue(startsAtTime)
+			userClaims.NotBefore = startsAtTime.Unix()
+		} else {
+			data.StartsAt = timetypes.NewRFC3339Null()
 		}
+	} else {
+		// No start time specified - set to null
+		data.StartsAt = timetypes.NewRFC3339Null()
 	}
 
 	// Set User Limits
@@ -521,28 +654,90 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		userClaims.Src = networks
 	}
 
-	// Handle expiry
-	if !data.Expiry.IsNull() && !data.Expiry.IsUnknown() {
+	// Handle expiry (support old, new, and absolute variants)
+	var expiresAtTime time.Time
+	if !data.ExpiresIn.IsNull() && !data.ExpiresIn.IsUnknown() {
+		// New relative duration - compute and store absolute
+		duration, diags := data.ExpiresIn.ValueGoDuration()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if duration != 0 {
+			expiresAtTime = time.Now().Add(duration)
+			data.ExpiresAt = timetypes.NewRFC3339TimeValue(expiresAtTime)
+			userClaims.Expires = expiresAtTime.Unix()
+		} else {
+			data.ExpiresAt = timetypes.NewRFC3339Null()
+		}
+	} else if !data.ExpiresAt.IsNull() && !data.ExpiresAt.IsUnknown() {
+		// Absolute timestamp provided
+		expiresAtTime, diags := data.ExpiresAt.ValueRFC3339Time()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		userClaims.Expires = expiresAtTime.Unix()
+	} else if !data.Expiry.IsNull() && !data.Expiry.IsUnknown() {
+		// Old deprecated attribute - keep for backward compatibility
 		duration, diags := data.Expiry.ValueGoDuration()
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 		if duration != 0 {
-			userClaims.Expires = time.Now().Add(duration).Unix()
+			expiresAtTime = time.Now().Add(duration)
+			data.ExpiresAt = timetypes.NewRFC3339TimeValue(expiresAtTime)
+			userClaims.Expires = expiresAtTime.Unix()
+		} else {
+			data.ExpiresAt = timetypes.NewRFC3339Null()
 		}
+	} else {
+		// No expiry specified - set to null
+		data.ExpiresAt = timetypes.NewRFC3339Null()
 	}
 
-	// Handle start time
-	if !data.Start.IsNull() && !data.Start.IsUnknown() {
+	// Handle start time (support old, new, and absolute variants)
+	var startsAtTime time.Time
+	if !data.StartsIn.IsNull() && !data.StartsIn.IsUnknown() {
+		// New relative duration - compute and store absolute
+		duration, diags := data.StartsIn.ValueGoDuration()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if duration != 0 {
+			startsAtTime = time.Now().Add(duration)
+			data.StartsAt = timetypes.NewRFC3339TimeValue(startsAtTime)
+			userClaims.NotBefore = startsAtTime.Unix()
+		} else {
+			data.StartsAt = timetypes.NewRFC3339Null()
+		}
+	} else if !data.StartsAt.IsNull() && !data.StartsAt.IsUnknown() {
+		// Absolute timestamp provided
+		startsAtTime, diags := data.StartsAt.ValueRFC3339Time()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		userClaims.NotBefore = startsAtTime.Unix()
+	} else if !data.Start.IsNull() && !data.Start.IsUnknown() {
+		// Old deprecated attribute - keep for backward compatibility
 		duration, diags := data.Start.ValueGoDuration()
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 		if duration != 0 {
-			userClaims.NotBefore = time.Now().Add(duration).Unix()
+			startsAtTime = time.Now().Add(duration)
+			data.StartsAt = timetypes.NewRFC3339TimeValue(startsAtTime)
+			userClaims.NotBefore = startsAtTime.Unix()
+		} else {
+			data.StartsAt = timetypes.NewRFC3339Null()
 		}
+	} else {
+		// No start time specified - set to null
+		data.StartsAt = timetypes.NewRFC3339Null()
 	}
 
 	// Set User Limits

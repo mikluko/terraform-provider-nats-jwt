@@ -559,6 +559,316 @@ func testAccCheckUserPublicKeyFormat(resourceName, attrName string) resource.Tes
 	}
 }
 
+func TestAccUserResource_withExpiresIn(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create with expires_in
+			{
+				Config: testAccUserResourceConfigWithExpiresIn(),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("nsc_user.test", "name", "TestUser"),
+					resource.TestCheckResourceAttr("nsc_user.test", "expires_in", "720h"),
+					resource.TestCheckResourceAttrSet("nsc_user.test", "expires_at"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccUserResource_withExpiresAt(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create with absolute expires_at
+			{
+				Config: testAccUserResourceConfigWithExpiresAt(),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("nsc_user.test", "name", "TestUser"),
+					resource.TestCheckResourceAttr("nsc_user.test", "expires_at", "2026-01-01T00:00:00Z"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccUserResource_withStartsIn(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create with starts_in
+			{
+				Config: testAccUserResourceConfigWithStartsIn(),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("nsc_user.test", "name", "TestUser"),
+					resource.TestCheckResourceAttr("nsc_user.test", "starts_in", "24h"),
+					resource.TestCheckResourceAttrSet("nsc_user.test", "starts_at"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccUserResource_withStartsAt(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create with absolute starts_at
+			{
+				Config: testAccUserResourceConfigWithStartsAt(),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("nsc_user.test", "name", "TestUser"),
+					resource.TestCheckResourceAttr("nsc_user.test", "starts_at", "2025-01-01T00:00:00Z"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccUserResource_conflictingExpiryAttributes(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Attempt to use both expires_in and expires_at (should fail)
+			{
+				Config:      testAccUserResourceConfigWithConflictingExpiry(),
+				ExpectError: regexp.MustCompile("Only one of 'expires_in' or 'expires_at' can be specified"),
+			},
+		},
+	})
+}
+
+func TestAccUserResource_conflictingStartAttributes(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Attempt to use both starts_in and starts_at (should fail)
+			{
+				Config:      testAccUserResourceConfigWithConflictingStart(),
+				ExpectError: regexp.MustCompile("Only one of 'starts_in' or 'starts_at' can be specified"),
+			},
+		},
+	})
+}
+
+func testAccUserResourceConfigWithExpiresIn() string {
+	return `
+resource "nsc_nkey" "operator" {
+  type = "operator"
+}
+
+resource "nsc_nkey" "account" {
+  type = "account"
+}
+
+resource "nsc_nkey" "user" {
+  type = "user"
+}
+
+resource "nsc_operator" "test" {
+  name        = "TestOperator"
+  subject     = nsc_nkey.operator.public_key
+  issuer_seed = nsc_nkey.operator.seed
+}
+
+resource "nsc_account" "test" {
+  name        = "TestAccount"
+  subject     = nsc_nkey.account.public_key
+  issuer_seed = nsc_nkey.operator.seed
+}
+
+resource "nsc_user" "test" {
+  name        = "TestUser"
+  subject     = nsc_nkey.user.public_key
+  issuer_seed = nsc_nkey.account.seed
+  expires_in  = "720h"
+}
+`
+}
+
+func testAccUserResourceConfigWithExpiresAt() string {
+	return `
+resource "nsc_nkey" "operator" {
+  type = "operator"
+}
+
+resource "nsc_nkey" "account" {
+  type = "account"
+}
+
+resource "nsc_nkey" "user" {
+  type = "user"
+}
+
+resource "nsc_operator" "test" {
+  name        = "TestOperator"
+  subject     = nsc_nkey.operator.public_key
+  issuer_seed = nsc_nkey.operator.seed
+}
+
+resource "nsc_account" "test" {
+  name        = "TestAccount"
+  subject     = nsc_nkey.account.public_key
+  issuer_seed = nsc_nkey.operator.seed
+}
+
+resource "nsc_user" "test" {
+  name        = "TestUser"
+  subject     = nsc_nkey.user.public_key
+  issuer_seed = nsc_nkey.account.seed
+  expires_at  = "2026-01-01T00:00:00Z"
+}
+`
+}
+
+func testAccUserResourceConfigWithStartsIn() string {
+	return `
+resource "nsc_nkey" "operator" {
+  type = "operator"
+}
+
+resource "nsc_nkey" "account" {
+  type = "account"
+}
+
+resource "nsc_nkey" "user" {
+  type = "user"
+}
+
+resource "nsc_operator" "test" {
+  name        = "TestOperator"
+  subject     = nsc_nkey.operator.public_key
+  issuer_seed = nsc_nkey.operator.seed
+}
+
+resource "nsc_account" "test" {
+  name        = "TestAccount"
+  subject     = nsc_nkey.account.public_key
+  issuer_seed = nsc_nkey.operator.seed
+}
+
+resource "nsc_user" "test" {
+  name        = "TestUser"
+  subject     = nsc_nkey.user.public_key
+  issuer_seed = nsc_nkey.account.seed
+  starts_in   = "24h"
+}
+`
+}
+
+func testAccUserResourceConfigWithStartsAt() string {
+	return `
+resource "nsc_nkey" "operator" {
+  type = "operator"
+}
+
+resource "nsc_nkey" "account" {
+  type = "account"
+}
+
+resource "nsc_nkey" "user" {
+  type = "user"
+}
+
+resource "nsc_operator" "test" {
+  name        = "TestOperator"
+  subject     = nsc_nkey.operator.public_key
+  issuer_seed = nsc_nkey.operator.seed
+}
+
+resource "nsc_account" "test" {
+  name        = "TestAccount"
+  subject     = nsc_nkey.account.public_key
+  issuer_seed = nsc_nkey.operator.seed
+}
+
+resource "nsc_user" "test" {
+  name        = "TestUser"
+  subject     = nsc_nkey.user.public_key
+  issuer_seed = nsc_nkey.account.seed
+  starts_at   = "2025-01-01T00:00:00Z"
+}
+`
+}
+
+func testAccUserResourceConfigWithConflictingExpiry() string {
+	return `
+resource "nsc_nkey" "operator" {
+  type = "operator"
+}
+
+resource "nsc_nkey" "account" {
+  type = "account"
+}
+
+resource "nsc_nkey" "user" {
+  type = "user"
+}
+
+resource "nsc_operator" "test" {
+  name        = "TestOperator"
+  subject     = nsc_nkey.operator.public_key
+  issuer_seed = nsc_nkey.operator.seed
+}
+
+resource "nsc_account" "test" {
+  name        = "TestAccount"
+  subject     = nsc_nkey.account.public_key
+  issuer_seed = nsc_nkey.operator.seed
+}
+
+resource "nsc_user" "test" {
+  name        = "TestUser"
+  subject     = nsc_nkey.user.public_key
+  issuer_seed = nsc_nkey.account.seed
+  expires_in  = "720h"
+  expires_at  = "2026-01-01T00:00:00Z"
+}
+`
+}
+
+func testAccUserResourceConfigWithConflictingStart() string {
+	return `
+resource "nsc_nkey" "operator" {
+  type = "operator"
+}
+
+resource "nsc_nkey" "account" {
+  type = "account"
+}
+
+resource "nsc_nkey" "user" {
+  type = "user"
+}
+
+resource "nsc_operator" "test" {
+  name        = "TestOperator"
+  subject     = nsc_nkey.operator.public_key
+  issuer_seed = nsc_nkey.operator.seed
+}
+
+resource "nsc_account" "test" {
+  name        = "TestAccount"
+  subject     = nsc_nkey.account.public_key
+  issuer_seed = nsc_nkey.operator.seed
+}
+
+resource "nsc_user" "test" {
+  name        = "TestUser"
+  subject     = nsc_nkey.user.public_key
+  issuer_seed = nsc_nkey.account.seed
+  starts_in   = "24h"
+  starts_at   = "2025-01-01T00:00:00Z"
+}
+`
+}
+
 func testAccCheckUserCredsFormat(resourceName, attrName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[resourceName]

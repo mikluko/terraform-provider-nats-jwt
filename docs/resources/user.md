@@ -52,21 +52,27 @@ The resource provides two JWT output attributes:
 - `bearer` (Boolean) No connect challenge required for user
 - `deny_pub` (List of String) Deny publish permissions. If not specified, inherits from account default permissions.
 - `deny_sub` (List of String) Deny subscribe permissions. If not specified, inherits from account default permissions.
-- `expiry` (String) Valid until (e.g., '720h' for 30 days, '0s' for no expiry)
+- `expiry` (String) **DEPRECATED**: Use `expires_in` or `expires_at` instead. Valid until (e.g., '720h' for 30 days, '0s' for no expiry)
+- `expires_at` (String) Absolute expiry timestamp in RFC3339 format (e.g., '2026-01-01T00:00:00Z'). Mutually exclusive with `expires_in`. Use this for fixed deadlines that won't change.
+- `expires_in` (String) Relative expiry duration (e.g., '720h' for 30 days, '0s' for no expiry). Mutually exclusive with `expires_at`. JWT regenerates with new expiry on any resource change.
 - `max_data` (Number) Maximum number of bytes (-1 for unlimited)
 - `max_payload` (Number) Maximum message payload in bytes (-1 for unlimited)
 - `max_subscriptions` (Number) Maximum number of subscriptions (-1 for unlimited)
 - `response_ttl` (String) Time limit for response permissions
 - `source_network` (List of String) Source network for connection
-- `start` (String) Valid from (e.g., '72h' for 3 days, '0s' for immediately)
+- `start` (String) **DEPRECATED**: Use `starts_in` or `starts_at` instead. Valid from (e.g., '72h' for 3 days, '0s' for immediately)
+- `starts_at` (String) Absolute start timestamp in RFC3339 format (e.g., '2025-01-01T00:00:00Z'). Mutually exclusive with `starts_in`. Use this for fixed start times that won't change.
+- `starts_in` (String) Relative start duration (e.g., '24h' for 1 day from now, '0s' for immediately). Mutually exclusive with `starts_at`. JWT regenerates with new start time on any resource change.
 - `tag` (List of String) Tags for user
 
 ### Read-Only
 
+- `expires_at` (String) Computed expiry timestamp in RFC3339 format. Set when using `expires_in`, or contains the value from explicit `expires_at` input.
 - `id` (String) User identifier (public key)
 - `jwt` (String) Generated JWT token. Only populated when bearer = false. For bearer tokens, use jwt_sensitive instead.
 - `jwt_sensitive` (String, Sensitive) Generated JWT token (always populated, marked as sensitive). Use this when bearer = true.
 - `public_key` (String) User public key (same as subject)
+- `starts_at` (String) Computed start timestamp in RFC3339 format. Set when using `starts_in`, or contains the value from explicit `starts_at` input.
 
 ## Example Usage
 
@@ -136,6 +142,59 @@ output "user_creds" {
 }
 ```
 
+### User with Rolling Expiry (expires_in)
+```terraform
+# User with rolling 30-day expiry (recomputes on every change)
+resource "nsc_user" "rolling_expiry" {
+  name        = "RollingExpiryUser"
+  subject     = nsc_nkey.user.public_key
+  issuer_seed = nsc_nkey.account.seed
+
+  # Rolling expiry - JWT expires 30 days from when it's issued
+  # NOTE: This recomputes on EVERY resource change, issuing a new JWT
+  # with a new 30-day expiry window
+  expires_in  = "720h"  # 30 days
+
+  allow_pub = ["app.>"]
+  allow_sub = ["app.>"]
+}
+
+output "rolling_expiry_jwt" {
+  value = nsc_user.rolling_expiry.jwt
+}
+
+output "rolling_expiry_time" {
+  value       = nsc_user.rolling_expiry.expires_at
+  description = "Actual expiry timestamp (changes on every update)"
+}
+```
+
+### User with Fixed Deadline (expires_at)
+```terraform
+# User with fixed expiry date (never changes)
+resource "nsc_user" "fixed_expiry" {
+  name        = "FixedExpiryUser"
+  subject     = nsc_nkey.user.public_key
+  issuer_seed = nsc_nkey.account.seed
+
+  # Fixed deadline - JWT always expires at this specific time
+  # This timestamp stays constant even when other attributes change
+  expires_at = "2026-01-01T00:00:00Z"
+
+  allow_pub = ["app.>"]
+  allow_sub = ["app.>"]
+}
+
+output "fixed_expiry_jwt" {
+  value = nsc_user.fixed_expiry.jwt
+}
+
+output "fixed_expiry_time" {
+  value       = nsc_user.fixed_expiry.expires_at
+  description = "Fixed expiry timestamp (never changes)"
+}
+```
+
 ### Bearer Token User (Single-Factor Authentication)
 ```terraform
 # Generate keys
@@ -182,7 +241,8 @@ resource "nsc_user" "api_client" {
   max_payload       = 65536 # 64KB
 
   # Expiry (recommended for bearer tokens)
-  expiry = "720h" # 30 days
+  # Use expires_in for rolling 30-day window
+  expires_in = "720h" # 30 days
 }
 
 # IMPORTANT: Use jwt_sensitive for bearer tokens

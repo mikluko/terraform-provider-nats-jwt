@@ -33,10 +33,14 @@ type OperatorResourceModel struct {
 	IssuerSeed    types.String         `tfsdk:"issuer_seed"`
 	SigningKeys   types.List           `tfsdk:"signing_keys"`
 	SystemAccount types.String         `tfsdk:"system_account"`
-	Expiry        timetypes.GoDuration `tfsdk:"expiry"`
-	Start         timetypes.GoDuration `tfsdk:"start"`
-	JWT           types.String         `tfsdk:"jwt"`
-	PublicKey     types.String         `tfsdk:"public_key"`
+	Expiry    timetypes.GoDuration `tfsdk:"expiry"`
+	Start     timetypes.GoDuration `tfsdk:"start"`
+	ExpiresIn timetypes.GoDuration `tfsdk:"expires_in"`
+	ExpiresAt timetypes.RFC3339    `tfsdk:"expires_at"`
+	StartsIn  timetypes.GoDuration `tfsdk:"starts_in"`
+	StartsAt  timetypes.RFC3339    `tfsdk:"starts_at"`
+	JWT       types.String         `tfsdk:"jwt"`
+	PublicKey types.String         `tfsdk:"public_key"`
 }
 
 func (r *OperatorResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -97,6 +101,28 @@ func (r *OperatorResource) Schema(_ context.Context, req resource.SchemaRequest,
 				Default:             stringdefault.StaticString("0s"),
 				MarkdownDescription: "Valid from (e.g., '72h' for 3 days, '0s' for immediately)",
 			},
+			"expires_in": schema.StringAttribute{
+				CustomType:          timetypes.GoDurationType{},
+				Optional:            true,
+				MarkdownDescription: "Relative expiry duration (e.g., '8760h' for 1 year). Mutually exclusive with expires_at.",
+			},
+			"expires_at": schema.StringAttribute{
+				CustomType:          timetypes.RFC3339Type{},
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Absolute expiry timestamp (RFC3339). Can be specified directly or computed from expires_in. Mutually exclusive with expires_in.",
+			},
+			"starts_in": schema.StringAttribute{
+				CustomType:          timetypes.GoDurationType{},
+				Optional:            true,
+				MarkdownDescription: "Relative start delay (e.g., '72h' for 3 days). Mutually exclusive with starts_at.",
+			},
+			"starts_at": schema.StringAttribute{
+				CustomType:          timetypes.RFC3339Type{},
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Absolute start timestamp (RFC3339). Can be specified directly or computed from starts_in. Mutually exclusive with starts_in.",
+			},
 			"jwt": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Generated JWT token",
@@ -106,6 +132,51 @@ func (r *OperatorResource) Schema(_ context.Context, req resource.SchemaRequest,
 				MarkdownDescription: "Operator public key (same as subject)",
 			},
 		},
+	}
+}
+
+func (r *OperatorResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data OperatorResourceModel
+
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Validate expiry attributes are mutually exclusive
+	expiryCount := 0
+	if !data.Expiry.IsNull() && !data.Expiry.IsUnknown() {
+		expiryCount++
+	}
+	if !data.ExpiresIn.IsNull() && !data.ExpiresIn.IsUnknown() {
+		expiryCount++
+	}
+	if !data.ExpiresAt.IsNull() && !data.ExpiresAt.IsUnknown() {
+		expiryCount++
+	}
+	if expiryCount > 1 {
+		resp.Diagnostics.AddError(
+			"Conflicting Expiry Configuration",
+			"Only one of 'expires_in' or 'expires_at' can be specified.",
+		)
+	}
+
+	// Validate start attributes are mutually exclusive
+	startCount := 0
+	if !data.Start.IsNull() && !data.Start.IsUnknown() {
+		startCount++
+	}
+	if !data.StartsIn.IsNull() && !data.StartsIn.IsUnknown() {
+		startCount++
+	}
+	if !data.StartsAt.IsNull() && !data.StartsAt.IsUnknown() {
+		startCount++
+	}
+	if startCount > 1 {
+		resp.Diagnostics.AddError(
+			"Conflicting Start Configuration",
+			"Only one of 'starts_in' or 'starts_at' can be specified.",
+		)
 	}
 }
 
@@ -165,28 +236,90 @@ func (r *OperatorResource) Create(ctx context.Context, req resource.CreateReques
 	operatorClaims := jwt.NewOperatorClaims(operatorPubKey)
 	operatorClaims.Name = data.Name.ValueString()
 
-	// Handle expiry
-	if !data.Expiry.IsNull() && !data.Expiry.IsUnknown() {
+	// Handle expiry (support old, new, and absolute variants)
+	var expiresAtTime time.Time
+	if !data.ExpiresIn.IsNull() && !data.ExpiresIn.IsUnknown() {
+		// New relative duration - compute and store absolute
+		duration, diags := data.ExpiresIn.ValueGoDuration()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if duration != 0 {
+			expiresAtTime = time.Now().Add(duration)
+			data.ExpiresAt = timetypes.NewRFC3339TimeValue(expiresAtTime)
+			operatorClaims.Expires = expiresAtTime.Unix()
+		} else {
+			data.ExpiresAt = timetypes.NewRFC3339Null()
+		}
+	} else if !data.ExpiresAt.IsNull() && !data.ExpiresAt.IsUnknown() {
+		// Absolute timestamp provided
+		expiresAtTime, diags := data.ExpiresAt.ValueRFC3339Time()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		operatorClaims.Expires = expiresAtTime.Unix()
+	} else if !data.Expiry.IsNull() && !data.Expiry.IsUnknown() {
+		// Old deprecated attribute - keep for backward compatibility
 		duration, diags := data.Expiry.ValueGoDuration()
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 		if duration != 0 {
-			operatorClaims.Expires = time.Now().Add(duration).Unix()
+			expiresAtTime = time.Now().Add(duration)
+			data.ExpiresAt = timetypes.NewRFC3339TimeValue(expiresAtTime)
+			operatorClaims.Expires = expiresAtTime.Unix()
+		} else {
+			data.ExpiresAt = timetypes.NewRFC3339Null()
 		}
+	} else {
+		// No expiry specified - set to null
+		data.ExpiresAt = timetypes.NewRFC3339Null()
 	}
 
-	// Handle start time
-	if !data.Start.IsNull() && !data.Start.IsUnknown() {
+	// Handle start time (support old, new, and absolute variants)
+	var startsAtTime time.Time
+	if !data.StartsIn.IsNull() && !data.StartsIn.IsUnknown() {
+		// New relative duration - compute and store absolute
+		duration, diags := data.StartsIn.ValueGoDuration()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if duration != 0 {
+			startsAtTime = time.Now().Add(duration)
+			data.StartsAt = timetypes.NewRFC3339TimeValue(startsAtTime)
+			operatorClaims.NotBefore = startsAtTime.Unix()
+		} else {
+			data.StartsAt = timetypes.NewRFC3339Null()
+		}
+	} else if !data.StartsAt.IsNull() && !data.StartsAt.IsUnknown() {
+		// Absolute timestamp provided
+		startsAtTime, diags := data.StartsAt.ValueRFC3339Time()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		operatorClaims.NotBefore = startsAtTime.Unix()
+	} else if !data.Start.IsNull() && !data.Start.IsUnknown() {
+		// Old deprecated attribute - keep for backward compatibility
 		duration, diags := data.Start.ValueGoDuration()
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 		if duration != 0 {
-			operatorClaims.NotBefore = time.Now().Add(duration).Unix()
+			startsAtTime = time.Now().Add(duration)
+			data.StartsAt = timetypes.NewRFC3339TimeValue(startsAtTime)
+			operatorClaims.NotBefore = startsAtTime.Unix()
+		} else {
+			data.StartsAt = timetypes.NewRFC3339Null()
 		}
+	} else {
+		// No start time specified - set to null
+		data.StartsAt = timetypes.NewRFC3339Null()
 	}
 
 	// Add signing keys if provided
@@ -279,28 +412,90 @@ func (r *OperatorResource) Update(ctx context.Context, req resource.UpdateReques
 	operatorClaims := jwt.NewOperatorClaims(operatorPubKey)
 	operatorClaims.Name = data.Name.ValueString()
 
-	// Handle expiry
-	if !data.Expiry.IsNull() && !data.Expiry.IsUnknown() {
+	// Handle expiry (support old, new, and absolute variants)
+	var expiresAtTime time.Time
+	if !data.ExpiresIn.IsNull() && !data.ExpiresIn.IsUnknown() {
+		// New relative duration - compute and store absolute
+		duration, diags := data.ExpiresIn.ValueGoDuration()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if duration != 0 {
+			expiresAtTime = time.Now().Add(duration)
+			data.ExpiresAt = timetypes.NewRFC3339TimeValue(expiresAtTime)
+			operatorClaims.Expires = expiresAtTime.Unix()
+		} else {
+			data.ExpiresAt = timetypes.NewRFC3339Null()
+		}
+	} else if !data.ExpiresAt.IsNull() && !data.ExpiresAt.IsUnknown() {
+		// Absolute timestamp provided
+		expiresAtTime, diags := data.ExpiresAt.ValueRFC3339Time()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		operatorClaims.Expires = expiresAtTime.Unix()
+	} else if !data.Expiry.IsNull() && !data.Expiry.IsUnknown() {
+		// Old deprecated attribute - keep for backward compatibility
 		duration, diags := data.Expiry.ValueGoDuration()
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 		if duration != 0 {
-			operatorClaims.Expires = time.Now().Add(duration).Unix()
+			expiresAtTime = time.Now().Add(duration)
+			data.ExpiresAt = timetypes.NewRFC3339TimeValue(expiresAtTime)
+			operatorClaims.Expires = expiresAtTime.Unix()
+		} else {
+			data.ExpiresAt = timetypes.NewRFC3339Null()
 		}
+	} else {
+		// No expiry specified - set to null
+		data.ExpiresAt = timetypes.NewRFC3339Null()
 	}
 
-	// Handle start time
-	if !data.Start.IsNull() && !data.Start.IsUnknown() {
+	// Handle start time (support old, new, and absolute variants)
+	var startsAtTime time.Time
+	if !data.StartsIn.IsNull() && !data.StartsIn.IsUnknown() {
+		// New relative duration - compute and store absolute
+		duration, diags := data.StartsIn.ValueGoDuration()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if duration != 0 {
+			startsAtTime = time.Now().Add(duration)
+			data.StartsAt = timetypes.NewRFC3339TimeValue(startsAtTime)
+			operatorClaims.NotBefore = startsAtTime.Unix()
+		} else {
+			data.StartsAt = timetypes.NewRFC3339Null()
+		}
+	} else if !data.StartsAt.IsNull() && !data.StartsAt.IsUnknown() {
+		// Absolute timestamp provided
+		startsAtTime, diags := data.StartsAt.ValueRFC3339Time()
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		operatorClaims.NotBefore = startsAtTime.Unix()
+	} else if !data.Start.IsNull() && !data.Start.IsUnknown() {
+		// Old deprecated attribute - keep for backward compatibility
 		duration, diags := data.Start.ValueGoDuration()
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 		if duration != 0 {
-			operatorClaims.NotBefore = time.Now().Add(duration).Unix()
+			startsAtTime = time.Now().Add(duration)
+			data.StartsAt = timetypes.NewRFC3339TimeValue(startsAtTime)
+			operatorClaims.NotBefore = startsAtTime.Unix()
+		} else {
+			data.StartsAt = timetypes.NewRFC3339Null()
 		}
+	} else {
+		// No start time specified - set to null
+		data.StartsAt = timetypes.NewRFC3339Null()
 	}
 
 	// Add signing keys if provided
