@@ -2,4 +2,5 @@
 !.gitignore
 !.github/
 !.envrc.example
-dist/
+/dist/
+/terraform-provider-nsc
