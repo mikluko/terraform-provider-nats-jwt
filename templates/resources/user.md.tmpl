@@ -41,5 +41,11 @@ The resource provides two JWT output attributes:
 ### Standard User (Two-Factor Authentication)
 {{ tffile "examples/resources/nsc_user/resource.tf" }}
 
+### User with Rolling Expiry (expires_in)
+{{ tffile "examples/resources/nsc_user/rolling_expiry.tf" }}
+
+### User with Fixed Deadline (expires_at)
+{{ tffile "examples/resources/nsc_user/fixed_expiry.tf" }}
+
 ### Bearer Token User (Single-Factor Authentication)
 {{ tffile "examples/resources/nsc_user/bearer.tf" }}

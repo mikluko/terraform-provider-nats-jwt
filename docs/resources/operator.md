@@ -23,9 +23,13 @@ Manages a NATS JWT Operator. Use with nsc_nkey for key generation.
 
 ### Optional
 
+- `expires_at` (String) Absolute expiry timestamp (RFC3339). Can be specified directly or computed from expires_in. Mutually exclusive with expires_in.
+- `expires_in` (String) Relative expiry duration (e.g., '8760h' for 1 year). Mutually exclusive with expires_at.
 - `expiry` (String) Valid until (e.g., '8760h' for 1 year, '0s' for no expiry)
 - `signing_keys` (List of String) Optional signing key public keys (for signing account JWTs)
 - `start` (String) Valid from (e.g., '72h' for 3 days, '0s' for immediately)
+- `starts_at` (String) Absolute start timestamp (RFC3339). Can be specified directly or computed from starts_in. Mutually exclusive with starts_in.
+- `starts_in` (String) Relative start delay (e.g., '72h' for 3 days). Mutually exclusive with starts_at.
 - `system_account` (String) System account public key reference
 
 ### Read-Only

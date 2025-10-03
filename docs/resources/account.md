@@ -30,6 +30,8 @@ Manages a NATS JWT Account
 - `deny_pub` (List of String) Deny publish permissions
 - `deny_sub` (List of String) Deny subscribe permissions
 - `disallow_bearer_token` (Boolean) Disallow user JWTs to be bearer tokens
+- `expires_at` (String) Absolute expiry timestamp (RFC3339). Can be specified directly or computed from expires_in. Mutually exclusive with expires_in.
+- `expires_in` (String) Relative expiry duration (e.g., '8760h' for 1 year). Mutually exclusive with expires_at.
 - `expiry` (String) Valid until (e.g., '8760h' for 1 year, '0s' for no expiry)
 - `export` (Block List) Exports this account provides to other accounts (see [below for nested schema](#nestedblock--export))
 - `import` (Block List) Imports from other accounts (see [below for nested schema](#nestedblock--import))
@@ -51,6 +53,8 @@ Manages a NATS JWT Account
 - `response_ttl` (String) Time limit for response permissions
 - `signing_keys` (List of String) Optional signing key public keys (for signing user JWTs)
 - `start` (String) Valid from (e.g., '72h' for 3 days, '0s' for immediately)
+- `starts_at` (String) Absolute start timestamp (RFC3339). Can be specified directly or computed from starts_in. Mutually exclusive with starts_in.
+- `starts_in` (String) Relative start delay (e.g., '72h' for 3 days). Mutually exclusive with starts_at.
 
 ### Read-Only
 

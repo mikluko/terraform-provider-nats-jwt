@@ -42,7 +42,7 @@ resource "nsc_user" "api_client" {
   max_payload       = 65536 # 64KB
 
   # Expiry (recommended for bearer tokens)
-  expiry = "720h" # 30 days
+  expires_in = "720h" # 30 days
 }
 
 # IMPORTANT: Use jwt_sensitive for bearer tokens
