@@ -1,0 +1,33 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.ProviderName}}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{ tffile "examples/resources/nsc_nkey/resource.tf" }}
+
+## Import
+
+Keys can be imported by providing the seed (private key). The key type is automatically detected from the seed prefix:
+
+```shell
+# Import an operator key (seed starts with SO)
+terraform import nsc_nkey.operator SOABC123...
+
+# Import an account key (seed starts with SA)
+terraform import nsc_nkey.account SAXYZ789...
+
+# Import a user key (seed starts with SU)
+terraform import nsc_nkey.user SUJKL456...
+```
+
+The provider will parse the seed to determine the key type automatically. No need to specify the type during import.
+
+{{ .SchemaMarkdown | trimspace }}

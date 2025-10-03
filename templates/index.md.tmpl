@@ -23,6 +23,34 @@ NATS JWT authentication follows a three-level hierarchy:
 2. **Account**: Represents a tenant/namespace that signs user JWTs
 3. **User**: Individual authentication credentials with specific permissions
 
+## Resource Architecture
+
+The provider implements a two-phase architecture (ADR-006):
+
+### Phase 1: Key Generation
+Use `nsc_nkey` resources to generate cryptographic keys:
+- Each key is a separate resource (operator keys, account keys, user keys, signing keys)
+- Keys are immutable - changing the key type requires resource replacement
+- Only `nsc_nkey` resources support import (by seed)
+
+### Phase 2: JWT Creation
+Use JWT resources to sign tokens:
+- `nsc_operator` - Self-signed operator JWT (uses operator key for both subject and issuer)
+- `nsc_account` - Account JWT signed by operator key
+- `nsc_user` - User JWT signed by account key
+
+JWT resources are deterministic functions - same inputs always produce the same JWT. They do not support import since they hold no secrets.
+
+## Importing Existing Keys
+
+Only `nsc_nkey` resources can be imported. Import by providing the seed (private key):
+
+```shell
+terraform import nsc_nkey.my_key SOABC...  # Seed starting with SO/SA/SU
+```
+
+The key type (operator/account/user) is automatically detected from the seed prefix.
+
 ## Example Usage
 
 {{tffile "examples/provider/main.tf"}}
