@@ -35,8 +35,8 @@ resource "nsc_operator" "main" {
   signing_keys = [nsc_nkey.operator_signing.public_key]
 
   # Optional: JWT validity
-  expiry = "8760h" # 1 year
-  start  = "0s"    # valid immediately
+  expires_in = "8760h" # 1 year
+  starts_in  = "0s"    # valid immediately
 }
 
 # Create account JWT
@@ -56,8 +56,8 @@ resource "nsc_account" "app" {
   response_ttl       = "5s"
 
   # JWT validity
-  expiry = "8760h" # 1 year
-  start  = "0s"    # valid immediately
+  expires_in = "8760h" # 1 year
+  starts_in  = "0s"    # valid immediately
 }
 
 # Create user JWT
@@ -83,8 +83,8 @@ resource "nsc_user" "service" {
   source_network = ["192.168.1.0/24"]
 
   # JWT validity
-  expiry = "720h" # 30 days
-  start  = "0s"   # valid immediately
+  expires_in = "720h" # 30 days
+  starts_in  = "0s"   # valid immediately
 
   # Optional: bearer token (no connect challenge required)
   bearer = false

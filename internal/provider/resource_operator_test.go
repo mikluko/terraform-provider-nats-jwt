@@ -20,8 +20,6 @@ func TestAccOperatorResource_basic(t *testing.T) {
 				Config: testAccOperatorResourceConfig("TestOperator"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("nsc_operator.test", "name", "TestOperator"),
-					resource.TestCheckResourceAttr("nsc_operator.test", "expiry", "0s"),
-					resource.TestCheckResourceAttr("nsc_operator.test", "start", "0s"),
 					resource.TestCheckResourceAttrSet("nsc_operator.test", "jwt"),
 					resource.TestCheckResourceAttrSet("nsc_operator.test", "subject"),
 					resource.TestCheckResourceAttrSet("nsc_operator.test", "issuer_seed"),
@@ -69,16 +67,16 @@ func TestAccOperatorResource_withExpiry(t *testing.T) {
 				Config: testAccOperatorResourceConfigWithExpiry("TestOperator", "720h", "24h"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("nsc_operator.test", "name", "TestOperator"),
-					resource.TestCheckResourceAttr("nsc_operator.test", "expiry", "720h"),
-					resource.TestCheckResourceAttr("nsc_operator.test", "start", "24h"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "expires_in", "720h"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "starts_in", "24h"),
 				),
 			},
 			// Update expiry
 			{
 				Config: testAccOperatorResourceConfigWithExpiry("TestOperator", "1440h", "48h"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("nsc_operator.test", "expiry", "1440h"),
-					resource.TestCheckResourceAttr("nsc_operator.test", "start", "48h"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "expires_in", "1440h"),
+					resource.TestCheckResourceAttr("nsc_operator.test", "starts_in", "48h"),
 				),
 			},
 		},
@@ -128,8 +126,8 @@ resource "nsc_operator" "test" {
   name        = %[1]q
   subject     = nsc_nkey.operator.public_key
   issuer_seed = nsc_nkey.operator.seed
-  expiry      = %[2]q
-  start       = %[3]q
+  expires_in  = %[2]q
+  starts_in   = %[3]q
 }
 `, name, expiry, start)
 }

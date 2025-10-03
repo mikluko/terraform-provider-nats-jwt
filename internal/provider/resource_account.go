@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -64,8 +63,6 @@ type AccountResourceModel struct {
 	DenySub          types.List           `tfsdk:"deny_sub"`
 	AllowPubResponse types.Int64          `tfsdk:"allow_pub_response"`
 	ResponseTTL      timetypes.GoDuration `tfsdk:"response_ttl"`
-	Expiry    timetypes.GoDuration `tfsdk:"expiry"`
-	Start     timetypes.GoDuration `tfsdk:"start"`
 	ExpiresIn timetypes.GoDuration `tfsdk:"expires_in"`
 	ExpiresAt timetypes.RFC3339    `tfsdk:"expires_at"`
 	StartsIn  timetypes.GoDuration `tfsdk:"starts_in"`
@@ -170,20 +167,6 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 				CustomType:          timetypes.GoDurationType{},
 				Optional:            true,
 				MarkdownDescription: "Time limit for response permissions",
-			},
-			"expiry": schema.StringAttribute{
-				CustomType:          timetypes.GoDurationType{},
-				Optional:            true,
-				Computed:            true,
-				Default:             stringdefault.StaticString("0s"),
-				MarkdownDescription: "Valid until (e.g., '8760h' for 1 year, '0s' for no expiry)",
-			},
-			"start": schema.StringAttribute{
-				CustomType:          timetypes.GoDurationType{},
-				Optional:            true,
-				Computed:            true,
-				Default:             stringdefault.StaticString("0s"),
-				MarkdownDescription: "Valid from (e.g., '72h' for 3 days, '0s' for immediately)",
 			},
 			"expires_in": schema.StringAttribute{
 				CustomType:          timetypes.GoDurationType{},
@@ -394,17 +377,7 @@ func (r *AccountResource) ValidateConfig(ctx context.Context, req resource.Valid
 	}
 
 	// Validate expiry attributes are mutually exclusive
-	expiryCount := 0
-	if !data.Expiry.IsNull() && !data.Expiry.IsUnknown() {
-		expiryCount++
-	}
-	if !data.ExpiresIn.IsNull() && !data.ExpiresIn.IsUnknown() {
-		expiryCount++
-	}
-	if !data.ExpiresAt.IsNull() && !data.ExpiresAt.IsUnknown() {
-		expiryCount++
-	}
-	if expiryCount > 1 {
+	if !data.ExpiresIn.IsNull() && !data.ExpiresIn.IsUnknown() && !data.ExpiresAt.IsNull() && !data.ExpiresAt.IsUnknown() {
 		resp.Diagnostics.AddError(
 			"Conflicting Expiry Configuration",
 			"Only one of 'expires_in' or 'expires_at' can be specified.",
@@ -412,17 +385,7 @@ func (r *AccountResource) ValidateConfig(ctx context.Context, req resource.Valid
 	}
 
 	// Validate start attributes are mutually exclusive
-	startCount := 0
-	if !data.Start.IsNull() && !data.Start.IsUnknown() {
-		startCount++
-	}
-	if !data.StartsIn.IsNull() && !data.StartsIn.IsUnknown() {
-		startCount++
-	}
-	if !data.StartsAt.IsNull() && !data.StartsAt.IsUnknown() {
-		startCount++
-	}
-	if startCount > 1 {
+	if !data.StartsIn.IsNull() && !data.StartsIn.IsUnknown() && !data.StartsAt.IsNull() && !data.StartsAt.IsUnknown() {
 		resp.Diagnostics.AddError(
 			"Conflicting Start Configuration",
 			"Only one of 'starts_in' or 'starts_at' can be specified.",
@@ -564,20 +527,6 @@ func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest
 			return
 		}
 		accountClaims.Expires = expiresAtTime.Unix()
-	} else if !data.Expiry.IsNull() && !data.Expiry.IsUnknown() {
-		// Old deprecated attribute - keep for backward compatibility
-		duration, diags := data.Expiry.ValueGoDuration()
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		if duration != 0 {
-			expiresAtTime = time.Now().Add(duration)
-			data.ExpiresAt = timetypes.NewRFC3339TimeValue(expiresAtTime)
-			accountClaims.Expires = expiresAtTime.Unix()
-		} else {
-			data.ExpiresAt = timetypes.NewRFC3339Null()
-		}
 	} else {
 		// No expiry specified - set to null
 		data.ExpiresAt = timetypes.NewRFC3339Null()
@@ -607,20 +556,6 @@ func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest
 			return
 		}
 		accountClaims.NotBefore = startsAtTime.Unix()
-	} else if !data.Start.IsNull() && !data.Start.IsUnknown() {
-		// Old deprecated attribute - keep for backward compatibility
-		duration, diags := data.Start.ValueGoDuration()
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		if duration != 0 {
-			startsAtTime = time.Now().Add(duration)
-			data.StartsAt = timetypes.NewRFC3339TimeValue(startsAtTime)
-			accountClaims.NotBefore = startsAtTime.Unix()
-		} else {
-			data.StartsAt = timetypes.NewRFC3339Null()
-		}
 	} else {
 		// No start time specified - set to null
 		data.StartsAt = timetypes.NewRFC3339Null()
@@ -959,20 +894,6 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 			return
 		}
 		accountClaims.Expires = expiresAtTime.Unix()
-	} else if !data.Expiry.IsNull() && !data.Expiry.IsUnknown() {
-		// Old deprecated attribute - keep for backward compatibility
-		duration, diags := data.Expiry.ValueGoDuration()
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		if duration != 0 {
-			expiresAtTime = time.Now().Add(duration)
-			data.ExpiresAt = timetypes.NewRFC3339TimeValue(expiresAtTime)
-			accountClaims.Expires = expiresAtTime.Unix()
-		} else {
-			data.ExpiresAt = timetypes.NewRFC3339Null()
-		}
 	} else {
 		// No expiry specified - set to null
 		data.ExpiresAt = timetypes.NewRFC3339Null()
@@ -1002,20 +923,6 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 			return
 		}
 		accountClaims.NotBefore = startsAtTime.Unix()
-	} else if !data.Start.IsNull() && !data.Start.IsUnknown() {
-		// Old deprecated attribute - keep for backward compatibility
-		duration, diags := data.Start.ValueGoDuration()
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		if duration != 0 {
-			startsAtTime = time.Now().Add(duration)
-			data.StartsAt = timetypes.NewRFC3339TimeValue(startsAtTime)
-			accountClaims.NotBefore = startsAtTime.Unix()
-		} else {
-			data.StartsAt = timetypes.NewRFC3339Null()
-		}
 	} else {
 		// No start time specified - set to null
 		data.StartsAt = timetypes.NewRFC3339Null()

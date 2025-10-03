@@ -21,8 +21,6 @@ func TestAccAccountResource_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("nsc_account.test", "name", "TestAccount"),
 					resource.TestCheckResourceAttrSet("nsc_account.test", "subject"),
 					resource.TestCheckResourceAttrSet("nsc_account.test", "issuer_seed"),
-					resource.TestCheckResourceAttr("nsc_account.test", "expiry", "0s"),
-					resource.TestCheckResourceAttr("nsc_account.test", "start", "0s"),
 					resource.TestCheckResourceAttrSet("nsc_account.test", "jwt"),
 					resource.TestCheckResourceAttrSet("nsc_account.test", "public_key"),
 					testAccCheckAccountPublicKeyFormat("nsc_account.test", "public_key"),
@@ -147,8 +145,8 @@ func TestAccAccountResource_withExpiry(t *testing.T) {
 			{
 				Config: testAccAccountResourceConfigWithExpiry("720h", "24h"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("nsc_account.test", "expiry", "720h"),
-					resource.TestCheckResourceAttr("nsc_account.test", "start", "24h"),
+					resource.TestCheckResourceAttr("nsc_account.test", "expires_in", "720h"),
+					resource.TestCheckResourceAttr("nsc_account.test", "starts_in", "24h"),
 				),
 			},
 		},
@@ -322,8 +320,8 @@ resource "nsc_account" "test" {
   name        = "TestAccount"
   subject     = nsc_nkey.account.public_key
   issuer_seed = nsc_nkey.operator.seed
-  expiry      = %[1]q
-  start       = %[2]q
+  expires_in  = %[1]q
+  starts_in   = %[2]q
 }
 `, expiry, start)
 }
