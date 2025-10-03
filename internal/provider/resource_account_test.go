@@ -20,7 +20,6 @@ func TestAccAccountResource_basic(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("nsc_account.test", "name", "TestAccount"),
 					resource.TestCheckResourceAttrSet("nsc_account.test", "subject"),
-					resource.TestCheckResourceAttrSet("nsc_account.test", "issuer_seed"),
 					resource.TestCheckResourceAttrSet("nsc_account.test", "jwt"),
 					resource.TestCheckResourceAttrSet("nsc_account.test", "public_key"),
 					testAccCheckAccountPublicKeyFormat("nsc_account.test", "public_key"),

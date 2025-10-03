@@ -22,7 +22,6 @@ func TestAccOperatorResource_basic(t *testing.T) {
 					resource.TestCheckResourceAttr("nsc_operator.test", "name", "TestOperator"),
 					resource.TestCheckResourceAttrSet("nsc_operator.test", "jwt"),
 					resource.TestCheckResourceAttrSet("nsc_operator.test", "subject"),
-					resource.TestCheckResourceAttrSet("nsc_operator.test", "issuer_seed"),
 					resource.TestCheckResourceAttrSet("nsc_operator.test", "public_key"),
 					testAccCheckOperatorPublicKeyFormat("nsc_operator.test", "public_key"),
 					testAccCheckOperatorPublicKeyFormat("nsc_operator.test", "subject"),

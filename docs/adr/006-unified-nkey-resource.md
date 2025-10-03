@@ -427,3 +427,73 @@ resource "local_file" "creds" {
 ## Recommendation
 
 Adopt this unified approach as a backwards-incompatible breaking change. This provides a clean, consistent API that solves all circular dependency issues while maintaining explicit control over key lifecycle.
+
+## Amendment: WriteOnly Seeds (2025-01)
+
+### Security Improvement
+
+The `issuer_seed` attribute on all JWT resources (`nsc_operator`, `nsc_account`, `nsc_user`) has been changed to `WriteOnly` to prevent seeds from being stored in Terraform state:
+
+```go
+"issuer_seed": schema.StringAttribute{
+    Required:  true,
+    Sensitive: true,
+    WriteOnly: true,  // Never stored in state
+    PlanModifiers: []planmodifier.String{
+        stringplanmodifier.RequiresReplace(),
+    },
+}
+```
+
+### Implementation Details
+
+**Requirements:**
+- Terraform 1.11+ (WriteOnly support)
+- terraform-plugin-framework v1.16.1+
+
+**Reading WriteOnly Attributes:**
+- In `Create()`: Read from `req.Config.Get()` for WriteOnly values, `req.Plan.Get()` for regular attributes
+- In `Update()`: Read from `req.Config.Get()` for WriteOnly values, `req.Plan.Get()` for regular attributes, `req.State.Get()` for preserved state
+
+```go
+func (r *OperatorResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+    var data OperatorResourceModel
+
+    // Read from Plan to get regular attributes with defaults
+    resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+
+    // Get WriteOnly issuer_seed from Config
+    var config OperatorResourceModel
+    resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+
+    operatorSeedStr := config.IssuerSeed.ValueString()
+    // ... use seed to sign JWT
+}
+```
+
+**Key Differences:**
+- WriteOnly values MUST be provided on every apply (Terraform doesn't remember them)
+- WriteOnly values are never in state or plan output
+- Users must manage seeds externally (e.g., in `nsc_nkey` resources or external key management)
+
+### Benefits
+
+1. **Enhanced Security**: Seeds never persisted to state files
+2. **Compliance**: Meets requirements for secret handling (no plaintext storage)
+3. **External Key Management**: Forces explicit key management patterns
+4. **Least Privilege**: State files can be shared without exposing signing keys
+
+### Migration
+
+This is a **backwards-compatible change** at the state level:
+- Existing state files with stored seeds continue to work
+- On next apply, seeds won't be persisted to state
+- Users must provide `issuer_seed` on every apply (reference from `nsc_nkey` resources)
+
+No state migration required - seeds simply stop being written on next apply.
+
+### Testing Considerations
+
+- Tests must not check for `issuer_seed` in state (`TestCheckResourceAttrSet` will fail)
+- WriteOnly attributes are only available in configuration, not state or plan
+- Test configurations must continue to provide `issuer_seed` on every apply

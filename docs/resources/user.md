@@ -39,7 +39,9 @@ The resource provides two JWT output attributes:
 
 ### Required
 
-- `issuer_seed` (String, Sensitive) Account seed for signing the user JWT (issuer)
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `issuer_seed` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Account seed for signing the user JWT (issuer). Never stored in state.
 - `name` (String) User name
 - `subject` (String) User public key (subject of the JWT)
 

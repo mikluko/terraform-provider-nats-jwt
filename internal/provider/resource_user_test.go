@@ -21,7 +21,6 @@ func TestAccUserResource_basic(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("nsc_user.test", "name", "TestUser"),
 					resource.TestCheckResourceAttrSet("nsc_user.test", "subject"),
-					resource.TestCheckResourceAttrSet("nsc_user.test", "issuer_seed"),
 					resource.TestCheckResourceAttr("nsc_user.test", "bearer", "false"),
 					resource.TestCheckResourceAttrSet("nsc_user.test", "jwt"),
 					resource.TestCheckResourceAttrSet("nsc_user.test", "public_key"),

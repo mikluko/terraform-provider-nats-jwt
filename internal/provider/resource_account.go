@@ -127,7 +127,8 @@ func (r *AccountResource) Schema(ctx context.Context, req resource.SchemaRequest
 			"issuer_seed": schema.StringAttribute{
 				Required:            true,
 				Sensitive:           true,
-				MarkdownDescription: "Operator seed for signing the account JWT (issuer)",
+				WriteOnly:           true,
+				MarkdownDescription: "Operator seed for signing the account JWT (issuer). Never stored in state.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -396,7 +397,15 @@ func (r *AccountResource) ValidateConfig(ctx context.Context, req resource.Valid
 func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data AccountResourceModel
 
+	// Read from Plan to get regular attributes with defaults
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get WriteOnly issuer_seed from Config
+	var config AccountResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -411,12 +420,23 @@ func (r *AccountResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	// Get operator seed (issuer) for signing
-	operatorSeedStr := data.IssuerSeed.ValueString()
+	// Get operator seed (issuer) for signing from Config
+	operatorSeedStr := config.IssuerSeed.ValueString()
+	if operatorSeedStr == "" {
+		resp.Diagnostics.AddError(
+			"Missing operator seed",
+			"Operator seed (issuer_seed) is required",
+		)
+		return
+	}
 	if !strings.HasPrefix(operatorSeedStr, "SO") {
+		prefix := operatorSeedStr
+		if len(prefix) > 2 {
+			prefix = prefix[:2]
+		}
 		resp.Diagnostics.AddError(
 			"Invalid operator seed",
-			fmt.Sprintf("Operator seed must start with 'SO', got: %s", operatorSeedStr[:2]),
+			fmt.Sprintf("Operator seed must start with 'SO', got: %s", prefix),
 		)
 		return
 	}
@@ -793,9 +813,16 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	// Get account public key and operator seed from state (immutable)
+	// Get WriteOnly issuer_seed from Config
+	var config AccountResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get account public key from state and operator seed from config (both immutable)
 	accountPubKey := state.Subject.ValueString()
-	operatorSeedStr := state.IssuerSeed.ValueString()
+	operatorSeedStr := config.IssuerSeed.ValueString()
 
 	operatorKP, err := nkeys.FromSeed([]byte(operatorSeedStr))
 	if err != nil {
@@ -1128,7 +1155,6 @@ func (r *AccountResource) Update(ctx context.Context, req resource.UpdateRequest
 	data.ID = state.ID
 	data.PublicKey = state.PublicKey
 	data.Subject = state.Subject
-	data.IssuerSeed = state.IssuerSeed
 	data.JWT = types.StringValue(accountJWT)
 
 	tflog.Trace(ctx, "updated account resource")

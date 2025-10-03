@@ -70,7 +70,8 @@ func (r *OperatorResource) Schema(_ context.Context, req resource.SchemaRequest,
 			"issuer_seed": schema.StringAttribute{
 				Required:            true,
 				Sensitive:           true,
-				MarkdownDescription: "Operator seed for signing the JWT (issuer). For operators, this is the same as subject's seed (self-issued).",
+				WriteOnly:           true,
+				MarkdownDescription: "Operator seed for signing the JWT (issuer). For operators, this is the same as subject's seed (self-issued). Never stored in state.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -150,7 +151,15 @@ func (r *OperatorResource) Configure(_ context.Context, req resource.ConfigureRe
 func (r *OperatorResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data OperatorResourceModel
 
+	// Read from Plan to get regular attributes with defaults
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get WriteOnly issuer_seed from Config
+	var config OperatorResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -165,12 +174,23 @@ func (r *OperatorResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	// Get operator seed (issuer) for self-signing
-	operatorSeedStr := data.IssuerSeed.ValueString()
+	// Get operator seed (issuer) for self-signing from Config
+	operatorSeedStr := config.IssuerSeed.ValueString()
+	if operatorSeedStr == "" {
+		resp.Diagnostics.AddError(
+			"Missing operator seed",
+			"Operator seed (issuer_seed) is required",
+		)
+		return
+	}
 	if !strings.HasPrefix(operatorSeedStr, "SO") {
+		prefix := operatorSeedStr
+		if len(prefix) > 2 {
+			prefix = prefix[:2]
+		}
 		resp.Diagnostics.AddError(
 			"Invalid operator seed",
-			fmt.Sprintf("Operator seed must start with 'SO', got: %s", operatorSeedStr[:2]),
+			fmt.Sprintf("Operator seed must start with 'SO', got: %s", prefix),
 		)
 		return
 	}
@@ -333,9 +353,16 @@ func (r *OperatorResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
-	// Get operator public key and seed from state (immutable)
+	// Get WriteOnly issuer_seed from Config
+	var config OperatorResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get operator public key from state and seed from config (both immutable)
 	operatorPubKey := state.Subject.ValueString()
-	operatorSeedStr := state.IssuerSeed.ValueString()
+	operatorSeedStr := config.IssuerSeed.ValueString()
 
 	operatorKP, err := nkeys.FromSeed([]byte(operatorSeedStr))
 	if err != nil {
@@ -449,7 +476,6 @@ func (r *OperatorResource) Update(ctx context.Context, req resource.UpdateReques
 	data.ID = state.ID
 	data.PublicKey = state.PublicKey
 	data.Subject = state.Subject
-	data.IssuerSeed = state.IssuerSeed
 	data.JWT = types.StringValue(operatorJWT)
 
 	tflog.Trace(ctx, "updated operator resource")

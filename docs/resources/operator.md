@@ -17,7 +17,9 @@ Manages a NATS JWT Operator. Use with nsc_nkey for key generation.
 
 ### Required
 
-- `issuer_seed` (String, Sensitive) Operator seed for signing the JWT (issuer). For operators, this is the same as subject's seed (self-issued).
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `issuer_seed` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Operator seed for signing the JWT (issuer). For operators, this is the same as subject's seed (self-issued). Never stored in state.
 - `name` (String) Operator name
 - `subject` (String) Operator public key (subject of the JWT)
 

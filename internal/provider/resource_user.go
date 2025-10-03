@@ -87,7 +87,8 @@ func (r *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"issuer_seed": schema.StringAttribute{
 				Required:            true,
 				Sensitive:           true,
-				MarkdownDescription: "Account seed for signing the user JWT (issuer)",
+				WriteOnly:           true,
+				MarkdownDescription: "Account seed for signing the user JWT (issuer). Never stored in state.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -229,7 +230,15 @@ func (r *UserResource) Configure(ctx context.Context, req resource.ConfigureRequ
 func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var data UserResourceModel
 
+	// Read from Plan to get regular attributes with defaults
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get WriteOnly issuer_seed from Config
+	var config UserResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -244,12 +253,23 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	// Get account seed (issuer) for signing
-	accountSeedStr := data.IssuerSeed.ValueString()
+	// Get account seed (issuer) for signing from Config
+	accountSeedStr := config.IssuerSeed.ValueString()
+	if accountSeedStr == "" {
+		resp.Diagnostics.AddError(
+			"Missing account seed",
+			"Account seed (issuer_seed) is required",
+		)
+		return
+	}
 	if !strings.HasPrefix(accountSeedStr, "SA") {
+		prefix := accountSeedStr
+		if len(prefix) > 2 {
+			prefix = prefix[:2]
+		}
 		resp.Diagnostics.AddError(
 			"Invalid issuer seed",
-			fmt.Sprintf("Account seed must start with 'SA', got: %s", accountSeedStr[:2]),
+			fmt.Sprintf("Account seed must start with 'SA', got: %s", prefix),
 		)
 		return
 	}
@@ -488,9 +508,16 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	// Get user public key and account seed from state (immutable)
+	// Get WriteOnly issuer_seed from Config
+	var config UserResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Get user public key from state and account seed from config (both immutable)
 	userPubKey := state.Subject.ValueString()
-	accountSeedStr := state.IssuerSeed.ValueString()
+	accountSeedStr := config.IssuerSeed.ValueString()
 
 	accountKP, err := nkeys.FromSeed([]byte(accountSeedStr))
 	if err != nil {
@@ -679,7 +706,6 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	data.ID = state.ID
 	data.PublicKey = state.PublicKey
 	data.Subject = state.Subject
-	data.IssuerSeed = state.IssuerSeed
 
 	// Always populate jwt_sensitive
 	data.JWTSensitive = types.StringValue(userJWT)

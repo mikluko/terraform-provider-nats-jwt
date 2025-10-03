@@ -17,7 +17,9 @@ Manages a NATS JWT Account
 
 ### Required
 
-- `issuer_seed` (String, Sensitive) Operator seed for signing the account JWT (issuer)
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `issuer_seed` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Operator seed for signing the account JWT (issuer). Never stored in state.
 - `name` (String) Account name
 - `subject` (String) Account public key (subject of the JWT)
 
