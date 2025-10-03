@@ -145,6 +145,27 @@ func TestAccUserResource_withBearerAndTags(t *testing.T) {
 					resource.TestCheckResourceAttr("nsc_user.test", "tag.#", "2"),
 					resource.TestCheckResourceAttr("nsc_user.test", "tag.0", "backend"),
 					resource.TestCheckResourceAttr("nsc_user.test", "tag.1", "service"),
+					// When bearer = true, jwt_sensitive should be populated (jwt not checked as it's null)
+					resource.TestCheckResourceAttrSet("nsc_user.test", "jwt_sensitive"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccUserResource_jwtSensitiveWithoutBearer(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create without bearer (default bearer = false)
+			{
+				Config: testAccUserResourceConfig("TestUser"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("nsc_user.test", "bearer", "false"),
+					// When bearer = false, both jwt and jwt_sensitive should be populated
+					resource.TestCheckResourceAttrSet("nsc_user.test", "jwt"),
+					resource.TestCheckResourceAttrSet("nsc_user.test", "jwt_sensitive"),
 				),
 			},
 		},

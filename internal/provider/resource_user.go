@@ -49,10 +49,11 @@ type UserResourceModel struct {
 	MaxPayload             types.Int64 `tfsdk:"max_payload"`
 	AllowedConnectionTypes types.List  `tfsdk:"allowed_connection_types"`
 
-	Expiry    timetypes.GoDuration `tfsdk:"expiry"`
-	Start     timetypes.GoDuration `tfsdk:"start"`
-	JWT       types.String         `tfsdk:"jwt"`
-	PublicKey types.String         `tfsdk:"public_key"`
+	Expiry       timetypes.GoDuration `tfsdk:"expiry"`
+	Start        timetypes.GoDuration `tfsdk:"start"`
+	JWT          types.String         `tfsdk:"jwt"`
+	JWTSensitive types.String         `tfsdk:"jwt_sensitive"`
+	PublicKey    types.String         `tfsdk:"public_key"`
 }
 
 func (r *UserResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -153,7 +154,12 @@ func (r *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			},
 			"jwt": schema.StringAttribute{
 				Computed:            true,
-				MarkdownDescription: "Generated JWT token",
+				MarkdownDescription: "Generated JWT token. Only populated when bearer = false. For bearer tokens, use jwt_sensitive instead.",
+			},
+			"jwt_sensitive": schema.StringAttribute{
+				Computed:            true,
+				Sensitive:           true,
+				MarkdownDescription: "Generated JWT token (always populated, marked as sensitive). Use this when bearer = true.",
 			},
 			"public_key": schema.StringAttribute{
 				Computed:            true,
@@ -373,7 +379,16 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 	// Set computed values
 	data.ID = types.StringValue(userPubKey)
 	data.PublicKey = types.StringValue(userPubKey)
-	data.JWT = types.StringValue(userJWT)
+
+	// Always populate jwt_sensitive
+	data.JWTSensitive = types.StringValue(userJWT)
+
+	// Only populate jwt when bearer = false (non-bearer tokens are not secrets)
+	if !data.Bearer.ValueBool() {
+		data.JWT = types.StringValue(userJWT)
+	} else {
+		data.JWT = types.StringNull()
+	}
 
 	tflog.Trace(ctx, "created user resource")
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -563,7 +578,16 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	data.PublicKey = state.PublicKey
 	data.Subject = state.Subject
 	data.IssuerSeed = state.IssuerSeed
-	data.JWT = types.StringValue(userJWT)
+
+	// Always populate jwt_sensitive
+	data.JWTSensitive = types.StringValue(userJWT)
+
+	// Only populate jwt when bearer = false (non-bearer tokens are not secrets)
+	if !data.Bearer.ValueBool() {
+		data.JWT = types.StringValue(userJWT)
+	} else {
+		data.JWT = types.StringNull()
+	}
 
 	tflog.Trace(ctx, "updated user resource")
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
