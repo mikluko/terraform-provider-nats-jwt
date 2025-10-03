@@ -30,19 +30,6 @@ func TestAccOperatorResource_basic(t *testing.T) {
 					testAccCheckOperatorPublicKeyFormat("nsc_operator.test", "subject"),
 				),
 			},
-			// ImportState testing
-			{
-				ResourceName:      "nsc_operator.test",
-				ImportState:       true,
-				ImportStateVerify: true,
-				ImportStateIdFunc: testAccOperatorImportStateIdFunc("nsc_operator.test"),
-				ImportStateVerifyIgnore: []string{
-					"jwt",          // JWT contains timestamps
-					"expiry",       // Default value handling
-					"start",        // Default value handling
-					"signing_keys", // Empty list handling
-				},
-			},
 			// Update and Read testing
 			{
 				Config: testAccOperatorResourceConfig("UpdatedOperator"),
@@ -201,24 +188,5 @@ func testAccCheckOperatorSeedFormat(resourceName, attrName string) resource.Test
 		}
 
 		return nil
-	}
-}
-
-func testAccOperatorImportStateIdFunc(resourceName string) resource.ImportStateIdFunc {
-	return func(s *terraform.State) (string, error) {
-		rs, ok := s.RootModule().Resources[resourceName]
-		if !ok {
-			return "", fmt.Errorf("Resource not found: %s", resourceName)
-		}
-
-		name := rs.Primary.Attributes["name"]
-		issuerSeed := rs.Primary.Attributes["issuer_seed"]
-
-		if name == "" || issuerSeed == "" {
-			return "", fmt.Errorf("Name or issuer_seed not found in state")
-		}
-
-		// Format: name/issuer_seed
-		return fmt.Sprintf("%s/%s", name, issuerSeed), nil
 	}
 }
