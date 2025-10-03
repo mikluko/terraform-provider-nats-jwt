@@ -32,12 +32,12 @@ type OperatorResourceModel struct {
 	IssuerSeed    types.String         `tfsdk:"issuer_seed"`
 	SigningKeys   types.List           `tfsdk:"signing_keys"`
 	SystemAccount types.String         `tfsdk:"system_account"`
-	ExpiresIn timetypes.GoDuration `tfsdk:"expires_in"`
-	ExpiresAt timetypes.RFC3339    `tfsdk:"expires_at"`
-	StartsIn  timetypes.GoDuration `tfsdk:"starts_in"`
-	StartsAt  timetypes.RFC3339    `tfsdk:"starts_at"`
-	JWT       types.String         `tfsdk:"jwt"`
-	PublicKey types.String         `tfsdk:"public_key"`
+	ExpiresIn     timetypes.GoDuration `tfsdk:"expires_in"`
+	ExpiresAt     timetypes.RFC3339    `tfsdk:"expires_at"`
+	StartsIn      timetypes.GoDuration `tfsdk:"starts_in"`
+	StartsAt      timetypes.RFC3339    `tfsdk:"starts_at"`
+	JWT           types.String         `tfsdk:"jwt"`
+	PublicKey     types.String         `tfsdk:"public_key"`
 }
 
 func (r *OperatorResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {

@@ -65,7 +65,7 @@ func TestAccAccountResource_withLimits(t *testing.T) {
 					resource.TestCheckResourceAttr("nsc_account.test", "max_consumers", "100"),
 					resource.TestCheckResourceAttr("nsc_account.test", "max_ack_pending", "1000"),
 					resource.TestCheckResourceAttr("nsc_account.test", "max_memory_stream_bytes", "134217728"), // 128MB
-					resource.TestCheckResourceAttr("nsc_account.test", "max_disk_stream_bytes", "1073741824"), // 1GB
+					resource.TestCheckResourceAttr("nsc_account.test", "max_disk_stream_bytes", "1073741824"),  // 1GB
 					resource.TestCheckResourceAttr("nsc_account.test", "max_bytes_required", "true"),
 				),
 			},

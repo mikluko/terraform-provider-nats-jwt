@@ -63,10 +63,10 @@ type AccountResourceModel struct {
 	DenySub          types.List           `tfsdk:"deny_sub"`
 	AllowPubResponse types.Int64          `tfsdk:"allow_pub_response"`
 	ResponseTTL      timetypes.GoDuration `tfsdk:"response_ttl"`
-	ExpiresIn timetypes.GoDuration `tfsdk:"expires_in"`
-	ExpiresAt timetypes.RFC3339    `tfsdk:"expires_at"`
-	StartsIn  timetypes.GoDuration `tfsdk:"starts_in"`
-	StartsAt  timetypes.RFC3339    `tfsdk:"starts_at"`
+	ExpiresIn        timetypes.GoDuration `tfsdk:"expires_in"`
+	ExpiresAt        timetypes.RFC3339    `tfsdk:"expires_at"`
+	StartsIn         timetypes.GoDuration `tfsdk:"starts_in"`
+	StartsAt         timetypes.RFC3339    `tfsdk:"starts_at"`
 
 	// Account Limits
 	MaxConnections       types.Int64 `tfsdk:"max_connections"`

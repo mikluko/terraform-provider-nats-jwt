@@ -18,9 +18,9 @@ func NewCredsDataSource() datasource.DataSource {
 type CredsDataSource struct{}
 
 type CredsDataSourceModel struct {
-	ID   types.String `tfsdk:"id"`
-	JWT  types.String `tfsdk:"jwt"`
-	Seed types.String `tfsdk:"seed"`
+	ID    types.String `tfsdk:"id"`
+	JWT   types.String `tfsdk:"jwt"`
+	Seed  types.String `tfsdk:"seed"`
 	Creds types.String `tfsdk:"creds"`
 }
 
