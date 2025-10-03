@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -20,7 +19,6 @@ import (
 )
 
 var _ resource.Resource = &OperatorResource{}
-var _ resource.ResourceWithImportState = &OperatorResource{}
 
 func NewOperatorResource() resource.Resource {
 	return &OperatorResource{}
@@ -366,83 +364,4 @@ func (r *OperatorResource) Delete(ctx context.Context, req resource.DeleteReques
 
 	// Nothing to clean up - all data is in state
 	tflog.Trace(ctx, "deleted operator resource")
-}
-
-func (r *OperatorResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Import format: name/seed
-	// Name can contain / encoded as // or %2F
-
-	parts := strings.Split(req.ID, "/")
-
-	if len(parts) < 2 {
-		resp.Diagnostics.AddError(
-			"Invalid import ID",
-			"Import ID must be: name/seed",
-		)
-		return
-	}
-
-	// Last part is the operator seed
-	operatorSeed := parts[len(parts)-1]
-	if !strings.HasPrefix(operatorSeed, "SO") {
-		resp.Diagnostics.AddError(
-			"Invalid operator seed",
-			fmt.Sprintf("Expected operator seed starting with 'SO', got: %s", operatorSeed),
-		)
-		return
-	}
-
-	// Everything before the seed is the name
-	nameParts := parts[:len(parts)-1]
-	name := strings.Join(nameParts, "/")
-
-	// Decode name (handle // and %2F encodings)
-	name = strings.ReplaceAll(name, "//", "\x00") // Temporary placeholder
-	name = strings.ReplaceAll(name, "%2F", "/")
-	name = strings.ReplaceAll(name, "\x00", "/") // Replace placeholder with /
-
-	// Validate the operator seed
-	kp, err := nkeys.FromSeed([]byte(operatorSeed))
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid operator seed", fmt.Sprintf("Failed to parse seed: %v", err))
-		return
-	}
-
-	publicKey, err := kp.PublicKey()
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid keypair", fmt.Sprintf("Failed to get public key: %v", err))
-		return
-	}
-
-	// Validate it's an operator key
-	if !strings.HasPrefix(publicKey, "O") {
-		resp.Diagnostics.AddError(
-			"Invalid key type",
-			fmt.Sprintf("Seed does not generate an operator public key (expected O*, got %s)", publicKey),
-		)
-		return
-	}
-
-	// Generate a fresh JWT
-	claims := jwt.NewOperatorClaims(publicKey)
-	claims.Name = name
-
-	// Encode JWT
-	operatorJWT, err := claims.Encode(kp)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to generate JWT", fmt.Sprintf("Failed to encode operator JWT: %v", err))
-		return
-	}
-
-	// Set state attributes
-	resp.State.SetAttribute(ctx, path.Root("id"), types.StringValue(publicKey))
-	resp.State.SetAttribute(ctx, path.Root("name"), types.StringValue(name))
-	resp.State.SetAttribute(ctx, path.Root("subject"), types.StringValue(publicKey))
-	resp.State.SetAttribute(ctx, path.Root("issuer_seed"), types.StringValue(operatorSeed))
-	resp.State.SetAttribute(ctx, path.Root("signing_keys"), types.ListNull(types.StringType))
-	resp.State.SetAttribute(ctx, path.Root("system_account"), types.StringNull())
-	resp.State.SetAttribute(ctx, path.Root("expiry"), timetypes.NewGoDurationValue(0))
-	resp.State.SetAttribute(ctx, path.Root("start"), timetypes.NewGoDurationValue(0))
-	resp.State.SetAttribute(ctx, path.Root("jwt"), types.StringValue(operatorJWT))
-	resp.State.SetAttribute(ctx, path.Root("public_key"), types.StringValue(publicKey))
 }

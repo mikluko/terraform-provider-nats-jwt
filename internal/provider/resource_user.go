@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
@@ -22,7 +21,6 @@ import (
 )
 
 var _ resource.Resource = &UserResource{}
-var _ resource.ResourceWithImportState = &UserResource{}
 
 func NewUserResource() resource.Resource {
 	return &UserResource{}
@@ -581,109 +579,4 @@ func (r *UserResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 
 	// Nothing to clean up - all data is in state
 	tflog.Trace(ctx, "deleted user resource")
-}
-
-func (r *UserResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Import format: name/subject/issuer_seed
-	// Name can contain / encoded as // or %2F
-
-	parts := strings.Split(req.ID, "/")
-
-	if len(parts) < 2 {
-		resp.Diagnostics.AddError(
-			"Invalid import ID",
-			"Import ID must be: name/subject/issuer_seed",
-		)
-		return
-	}
-
-	// Last part is the issuer seed (account seed)
-	issuerSeed := parts[len(parts)-1]
-	if !strings.HasPrefix(issuerSeed, "SA") {
-		resp.Diagnostics.AddError(
-			"Invalid issuer seed",
-			fmt.Sprintf("Expected account seed starting with 'SA', got: %s", issuerSeed),
-		)
-		return
-	}
-
-	// Second to last part is the subject (user public key)
-	subject := parts[len(parts)-2]
-	if !strings.HasPrefix(subject, "U") {
-		resp.Diagnostics.AddError(
-			"Invalid subject",
-			fmt.Sprintf("Expected user public key starting with 'U', got: %s", subject),
-		)
-		return
-	}
-
-	// Everything before is the name
-	nameParts := parts[:len(parts)-2]
-	name := strings.Join(nameParts, "/")
-
-	// Decode name (handle // and %2F encodings)
-	name = strings.ReplaceAll(name, "//", "\x00") // Temporary placeholder
-	name = strings.ReplaceAll(name, "%2F", "/")
-	name = strings.ReplaceAll(name, "\x00", "/") // Replace placeholder with /
-
-	// Validate the issuer seed
-	accKP, err := nkeys.FromSeed([]byte(issuerSeed))
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid issuer seed", fmt.Sprintf("Failed to parse seed: %v", err))
-		return
-	}
-
-	accPubKey, err := accKP.PublicKey()
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid keypair", fmt.Sprintf("Failed to get public key: %v", err))
-		return
-	}
-
-	// Validate it's an account key
-	if !strings.HasPrefix(accPubKey, "A") {
-		resp.Diagnostics.AddError(
-			"Invalid key type",
-			fmt.Sprintf("Issuer seed does not generate an account public key (expected A*, got %s)", accPubKey),
-		)
-		return
-	}
-
-	// Generate a fresh JWT
-	claims := jwt.NewUserClaims(subject)
-	claims.Name = name
-	claims.IssuerAccount = accPubKey
-
-	// Encode JWT
-	userJWT, err := claims.Encode(accKP)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to generate JWT", fmt.Sprintf("Failed to encode user JWT: %v", err))
-		return
-	}
-
-	// Set state attributes
-	resp.State.SetAttribute(ctx, path.Root("id"), types.StringValue(subject))
-	resp.State.SetAttribute(ctx, path.Root("name"), types.StringValue(name))
-	resp.State.SetAttribute(ctx, path.Root("subject"), types.StringValue(subject))
-	resp.State.SetAttribute(ctx, path.Root("issuer_seed"), types.StringValue(issuerSeed))
-	resp.State.SetAttribute(ctx, path.Root("expiry"), timetypes.NewGoDurationValue(0))
-	resp.State.SetAttribute(ctx, path.Root("start"), timetypes.NewGoDurationValue(0))
-	resp.State.SetAttribute(ctx, path.Root("allow_pub_response"), types.Int64Value(0))
-	resp.State.SetAttribute(ctx, path.Root("bearer"), types.BoolValue(false))
-	resp.State.SetAttribute(ctx, path.Root("jwt"), types.StringValue(userJWT))
-	resp.State.SetAttribute(ctx, path.Root("public_key"), types.StringValue(subject))
-
-	// Set empty lists for permissions
-	resp.State.SetAttribute(ctx, path.Root("allow_pub"), types.ListNull(types.StringType))
-	resp.State.SetAttribute(ctx, path.Root("allow_sub"), types.ListNull(types.StringType))
-	resp.State.SetAttribute(ctx, path.Root("deny_pub"), types.ListNull(types.StringType))
-	resp.State.SetAttribute(ctx, path.Root("deny_sub"), types.ListNull(types.StringType))
-	resp.State.SetAttribute(ctx, path.Root("tag"), types.ListNull(types.StringType))
-	resp.State.SetAttribute(ctx, path.Root("source_network"), types.ListNull(types.StringType))
-	resp.State.SetAttribute(ctx, path.Root("response_ttl"), timetypes.NewGoDurationNull())
-
-	// Set null for user limit fields
-	resp.State.SetAttribute(ctx, path.Root("max_subscriptions"), types.Int64Null())
-	resp.State.SetAttribute(ctx, path.Root("max_data"), types.Int64Null())
-	resp.State.SetAttribute(ctx, path.Root("max_payload"), types.Int64Null())
-	resp.State.SetAttribute(ctx, path.Root("allowed_connection_types"), types.ListNull(types.StringType))
 }
