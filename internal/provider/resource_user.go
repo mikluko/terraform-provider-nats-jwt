@@ -3,16 +3,19 @@ package provider
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/nats-io/jwt/v2"
@@ -32,6 +35,7 @@ type UserResourceModel struct {
 	Name             types.String         `tfsdk:"name"`
 	Subject          types.String         `tfsdk:"subject"`
 	IssuerSeed       types.String         `tfsdk:"issuer_seed"`
+	IssuerAccount    types.String         `tfsdk:"issuer_account"`
 	AllowPub         types.List           `tfsdk:"allow_pub"`
 	AllowSub         types.List           `tfsdk:"allow_sub"`
 	DenyPub          types.List           `tfsdk:"deny_pub"`
@@ -91,6 +95,17 @@ func (r *UserResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				MarkdownDescription: "Account seed for signing the user JWT (issuer). Never stored in state.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"issuer_account": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Account public key (subject) when issuer_seed is a signing key. If not provided, derived from issuer_seed (which must be an account key). Required when using account signing keys.",
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^A[A-Z2-7]{55}$`),
+						"must be a valid account public key starting with 'A'",
+					),
 				},
 			},
 			"allow_pub": schema.ListAttribute{
@@ -262,6 +277,8 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 		)
 		return
 	}
+
+	// Validate issuer_seed starts with 'SA' (account seed)
 	if !strings.HasPrefix(accountSeedStr, "SA") {
 		prefix := accountSeedStr
 		if len(prefix) > 2 {
@@ -280,24 +297,39 @@ func (r *UserResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	// Verify the seed produces an account key
-	accountPubKey, err := accountKP.PublicKey()
+	// Get the public key from issuer_seed (could be primary or signing key)
+	issuerPubKey, err := accountKP.PublicKey()
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get public key from issuer seed", err.Error())
 		return
 	}
-	if !strings.HasPrefix(accountPubKey, "A") {
+	if !strings.HasPrefix(issuerPubKey, "A") {
 		resp.Diagnostics.AddError(
 			"Invalid issuer seed",
-			fmt.Sprintf("Issuer seed does not generate an account public key (expected A*, got %s)", accountPubKey),
+			fmt.Sprintf("Issuer seed does not generate an account public key (expected A*, got %s)", issuerPubKey),
 		)
 		return
+	}
+
+	// Determine IssuerAccount field for user JWT
+	// This should be the account's primary/subject key, NOT the signing key
+	var issuerAccount string
+	if !data.IssuerAccount.IsNull() && !data.IssuerAccount.IsUnknown() {
+		// User provided explicit issuer_account
+		issuerAccount = data.IssuerAccount.ValueString()
+		// Validation already done by schema validator (must start with 'A')
+	} else {
+		// Auto-derive from issuer_seed (backwards compatible)
+		// When issuer_seed is the account's primary key, this works correctly
+		// When issuer_seed is a signing key, user MUST provide issuer_account explicitly
+		issuerAccount = issuerPubKey
+		data.IssuerAccount = types.StringValue(issuerAccount)
 	}
 
 	// Create user claims
 	userClaims := jwt.NewUserClaims(userPubKey)
 	userClaims.Name = data.Name.ValueString()
-	userClaims.IssuerAccount = accountPubKey
+	userClaims.IssuerAccount = issuerAccount
 
 	// Handle permissions
 	if !data.AllowPub.IsNull() {
@@ -525,17 +557,32 @@ func (r *UserResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	// Get account public key
-	accountPubKey, err := accountKP.PublicKey()
+	// Get the public key from issuer_seed (could be primary or signing key)
+	issuerPubKey, err := accountKP.PublicKey()
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to get account public key", err.Error())
 		return
 	}
 
+	// Determine IssuerAccount field for user JWT
+	// This should be the account's primary/subject key, NOT the signing key
+	var issuerAccount string
+	if !data.IssuerAccount.IsNull() && !data.IssuerAccount.IsUnknown() {
+		// User provided explicit issuer_account
+		issuerAccount = data.IssuerAccount.ValueString()
+		// Validation already done by schema validator (must start with 'A')
+	} else {
+		// Auto-derive from issuer_seed (backwards compatible)
+		// When issuer_seed is the account's primary key, this works correctly
+		// When issuer_seed is a signing key, user MUST provide issuer_account explicitly
+		issuerAccount = issuerPubKey
+		data.IssuerAccount = types.StringValue(issuerAccount)
+	}
+
 	// Create user claims with updated values
 	userClaims := jwt.NewUserClaims(userPubKey)
 	userClaims.Name = data.Name.ValueString()
-	userClaims.IssuerAccount = accountPubKey
+	userClaims.IssuerAccount = issuerAccount
 
 	// Handle permissions (same as create)
 	if !data.AllowPub.IsNull() {

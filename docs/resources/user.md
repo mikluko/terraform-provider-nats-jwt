@@ -56,6 +56,7 @@ The resource provides two JWT output attributes:
 - `deny_sub` (List of String) Deny subscribe permissions. If not specified, inherits from account default permissions.
 - `expires_at` (String) Absolute expiry timestamp in RFC3339 format (e.g., '2026-01-01T00:00:00Z'). Can be specified directly or computed from `expires_in`. Mutually exclusive with `expires_in`. Use this for fixed deadlines that won't change.
 - `expires_in` (String) Relative expiry duration (e.g., '720h' for 30 days, '0s' for no expiry). Mutually exclusive with `expires_at`. JWT regenerates with new expiry on any resource change (rolling expiry).
+- `issuer_account` (String) Account public key (subject) when issuer_seed is a signing key. If not provided, derived from issuer_seed (which must be an account key). Required when using account signing keys.
 - `max_data` (Number) Maximum number of bytes (-1 for unlimited)
 - `max_payload` (Number) Maximum message payload in bytes (-1 for unlimited)
 - `max_subscriptions` (Number) Maximum number of subscriptions (-1 for unlimited)
